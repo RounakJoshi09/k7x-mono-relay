@@ -29,7 +29,7 @@ class TallyDatabaseApp {
 
     try {
       await this.loadAppVersion();
-      await this.loadConfiguration();
+      await this.loadInitialConfiguration();
       await this.loadStartupSettings();
       this.setupEventListeners();
       this.setupIPCListeners();
@@ -56,6 +56,21 @@ class TallyDatabaseApp {
       }
     } catch (error) {
       console.error("Failed to load app version:", error);
+    }
+  }
+
+  async loadInitialConfiguration() {
+    try {
+      this.config = await window.tallyAPI.loadConfig();
+      this.populateFormFromConfig();
+      console.log("Initial configuration loaded successfully");
+
+      // Update the configuration status after initial loading
+      this.updateConfigurationStatus();
+    } catch (error) {
+      console.error("Failed to load initial configuration:", error);
+      // Don't show error toast during initialization, just log it
+      // The core will create a default configuration if none exists
     }
   }
 
@@ -140,7 +155,7 @@ class TallyDatabaseApp {
 
   isConfigurationModified() {
     if (!this.config) {
-      return true; // If no config is loaded, consider it modified
+      return false; // If no config is loaded yet, don't consider it modified
     }
 
     try {
@@ -148,7 +163,7 @@ class TallyDatabaseApp {
       return JSON.stringify(currentConfig) !== JSON.stringify(this.config);
     } catch (error) {
       console.error("Error checking configuration modification:", error);
-      return true; // Assume modified if there's an error
+      return false; // Assume not modified if there's an error
     }
   }
 
