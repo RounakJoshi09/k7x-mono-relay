@@ -549,15 +549,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 0.75rem;
-  color: white;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-.mysql-icon { background: linear-gradient(135deg, #00758f, #f29111); }
-.postgresql-icon { background: linear-gradient(135deg, #336791, #8cc8ff); }
-.sqlserver-icon { background: linear-gradient(135deg, #cc2927, #ff6b6b); }
-.bigquery-icon { background: linear-gradient(135deg, #4285f4, #34a853); }
+.mysql-icon { 
+  background-image: url('../assets/mysql.png'); 
+}
+.postgresql-icon { 
+  background-image: url('../assets/postgres.png'); 
+}
+.sqlserver-icon { 
+  background-image: url('../assets/sqlserver.png'); 
+}
+.bigquery-icon { 
+  background-image: url('../assets/bigquery.png'); 
+}
 
 /* Form Grid */
 .form-grid {
