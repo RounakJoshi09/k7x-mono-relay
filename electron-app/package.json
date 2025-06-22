@@ -7,12 +7,13 @@
   "author": "Tally Database Loader Team",
   "license": "ISC",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-files",
+    "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/",
     "build:watch": "tsc --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "pack": "npm run build && electron-builder --publish=never",
-    "dist": "npm run build && electron-builder --publish=always",
+    "pack": "npm run build && electron-builder --dir --publish=never",
+    "dist": "npm run build && electron-builder --publish=never",
     "dist:win": "npm run build && electron-builder --win --publish=never",
     "dist:all": "npm run build && electron-builder --win --mac --linux --publish=never",
     "clean": "rimraf dist build"
@@ -21,7 +22,8 @@
     "appId": "com.tallydatabaseloader.app",
     "productName": "Tally Database Loader",
     "directories": {
-      "output": "build"
+      "output": "build",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
@@ -67,50 +69,57 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64",
-            "ia32"
+            "x64"
           ]
         }
       ],
       "icon": "src/assets/icon.ico",
-      "publish": null
+      "publish": null,
+      "sign": false,
+      "verifyUpdateCodeSignature": false,
+      "forceCodeSigning": false,
+      "signAndEditExecutable": false
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Tally Database Loader"
+    "portable": {
+      "artifactName": "TallyDatabaseLoader-${version}-portable.exe"
     },
-    "msi": {
-      "oneClick": false,
-      "perMachine": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Tally Database Loader"
-    }
+    "forceCodeSigning": false,
+    "electronVersion": "27.1.0",
+    "afterSign": null,
+    "afterAllArtifactBuild": null,
+    "beforeBuild": null,
+    "beforePack": null,
+    "afterPack": null,
+    "artifactBuildTimeout": 0,
+    "buildDependenciesFromSource": false,
+    "buildVersion": "1.0.0",
+    "compression": "normal",
+    "copyright": "Copyright © 2024",
+    "extraMetadata": {
+      "main": "dist/main.js"
+    },
+    "generateUpdatesFilesForAllChannels": false,
+    "includeSubNodeModules": false,
+    "nodeGypRebuild": false,
+    "npmRebuild": false,
+    "removePackageScripts": false,
+    "removePackageKeywords": false
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "copyfiles": "^2.4.1",
     "electron": "^27.1.0",
     "electron-builder": "^24.6.4",
     "rimraf": "^5.0.5",
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
     "@azure/storage-file-datalake": "^12.24.0",
     "@google-cloud/bigquery": "^7.9.0",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.4",
     "js-yaml": "^4.1.0",
     "mysql2": "^3.11.3",
     "pg": "^8.13.0",

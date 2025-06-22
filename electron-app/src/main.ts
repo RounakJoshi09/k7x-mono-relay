@@ -51,7 +51,7 @@ class TallyDatabaseLoaderApp {
       height: 800,
       minWidth: 800,
       minHeight: 600,
-      icon: path.join(__dirname, "../assets/icon.png"),
+      icon: path.join(__dirname, "assets/icon.png"),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -63,10 +63,10 @@ class TallyDatabaseLoaderApp {
 
     // Load the renderer
     if (this.isDev) {
-      this.mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+      this.mainWindow.loadFile(path.join(__dirname, "renderer/index.html"));
       this.mainWindow.webContents.openDevTools();
     } else {
-      this.mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+      this.mainWindow.loadFile(path.join(__dirname, "renderer/index.html"));
     }
 
     this.mainWindow.once("ready-to-show", () => {

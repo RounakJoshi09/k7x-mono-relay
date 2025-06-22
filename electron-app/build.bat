@@ -35,6 +35,13 @@ if not exist "package.json" (
     exit /b 1
 )
 
+REM Clear previous builds
+echo Cleaning previous builds...
+if exist "dist" rmdir /s /q "dist"
+if exist "build" rmdir /s /q "build"
+echo Clean completed
+echo.
+
 echo Installing dependencies...
 call npm install
 if %errorlevel% neq 0 (
@@ -55,10 +62,28 @@ if %errorlevel% neq 0 (
 echo TypeScript build completed
 echo.
 
+REM Check if running as administrator
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo WARNING: Not running as administrator
+    echo This may cause issues with code signing and symbolic links
+    echo If you encounter build errors, try running this script as administrator
+    echo.
+)
+
 echo Creating Windows distribution packages...
+echo This may take several minutes...
 call npm run dist:win
 if %errorlevel% neq 0 (
+    echo.
     echo ERROR: Failed to create distribution packages
+    echo.
+    echo Possible solutions:
+    echo 1. Run this script as administrator
+    echo 2. Disable Windows Defender temporarily
+    echo 3. Check if antivirus is blocking the build process
+    echo 4. Try running: npm run pack (creates unpacked version)
+    echo.
     pause
     exit /b 1
 )
@@ -70,12 +95,15 @@ echo =======================================================
 echo.
 echo The following packages have been created in the 'build' directory:
 echo - NSIS Installer (.exe) - for standard Windows installation
-echo - MSI Installer (.msi) - for enterprise deployment
+echo - Portable Executable (.exe) - for portable usage
 echo.
 echo To test the application in development mode, run:
 echo   npm run dev
 echo.
 echo To start the built application, run:
 echo   npm start
+echo.
+echo To create an unpacked version (for testing), run:
+echo   npm run pack
 echo.
 pause 
