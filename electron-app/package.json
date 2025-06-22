@@ -76,7 +76,7 @@
           ]
         }
       ],
-      "icon": "src/assets/icon.ico",
+      "icon": "src/assets/icon.png",
       "publish": null,
       "sign": false,
       "verifyUpdateCodeSignature": false,
@@ -98,6 +98,7 @@
     "buildVersion": "1.0.0",
     "compression": "normal",
     "copyright": "Copyright © 2024",
+    "icon": "src/assets/icon.png",
     "extraMetadata": {
       "main": "dist/main.js"
     },

@@ -849,21 +849,14 @@ class TallyDatabaseApp {
     if (startButton) {
       startButton.disabled = isRunning;
       const icon = startButton.querySelector("i");
-
-      // The text is a direct text node, not wrapped in a span
-      // We need to find the text node between the icon and the ripple div
-      const textNode = Array.from(startButton.childNodes).find(
-        (node) =>
-          node.nodeType === Node.TEXT_NODE &&
-          node.textContent.trim() === "Start Synchronization"
-      );
+      const textSpan = startButton.querySelector("span");
 
       if (isRunning) {
         if (icon) icon.className = "bi bi-pause-fill";
-        if (textNode) textNode.textContent = " Sync Running...";
+        if (textSpan) textSpan.textContent = "Sync Running...";
       } else {
         if (icon) icon.className = "bi bi-play-fill";
-        if (textNode) textNode.textContent = " Start Synchronization";
+        if (textSpan) textSpan.textContent = "Start Synchronization";
       }
     }
 
