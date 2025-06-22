@@ -617,91 +617,53 @@ class _tally {
   updateLastAlterId(): Promise<void> {
     return new Promise<void>(async (resolve, reject) => {
       try {
-        // For now, just set the alter IDs to 0
-        // This is a simplified version for testing purposes
-        this.lastAlterIdMaster = 0;
-        this.lastAlterIdTransaction = 0;
+        //acquire last AlterID of master & transaction from Tally (for current company)
+        let xmlPayLoad =
+          '<?xml version="1.0" encoding="utf-8"?><ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>MyReport</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>ASCII (Comma Delimited)</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><REPORT NAME="MyReport"><FORMS>MyForm</FORMS></REPORT><FORM NAME="MyForm"><PARTS>MyPart</PARTS></FORM><PART NAME="MyPart"><LINES>MyLine</LINES><REPEAT>MyLine : MyCollection</REPEAT><SCROLLED>Vertical</SCROLLED></PART><LINE NAME="MyLine"><FIELDS>FldAlterMaster,FldAlterTransaction</FIELDS></LINE><FIELD NAME="FldAlterMaster"><SET>$AltMstId</SET></FIELD><FIELD NAME="FldAlterTransaction"><SET>$AltVchId</SET></FIELD><COLLECTION NAME="MyCollection"><TYPE>Company</TYPE><FILTER>FilterActiveCompany</FILTER></COLLECTION><SYSTEM TYPE="Formulae" NAME="FilterActiveCompany">$$IsEqual:##SVCurrentCompany:$Name</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+        if (this.config.company) {
+          // substitute company name if found
+          xmlPayLoad = xmlPayLoad.replace(
+            "##SVCurrentCompany",
+            `"${utility.String.escapeHTML(this.config.company)}"`
+          );
+        }
+        let contentLastAlterIdTally = await this.postTallyXML(xmlPayLoad);
+        if (contentLastAlterIdTally == "") {
+          //target company is closed
+          this.lastAlterIdMaster = -1;
+          this.lastAlterIdTransaction - 1;
+          if (!this.config.company) {
+            logger.logMessage("No company open in Tally");
+            return reject(
+              "Please select one or more company in Tally to sync data"
+            );
+          } else {
+            logger.logMessage(
+              `Specified company "${this.config.company}" is closed in Tally`
+            );
+            return reject("Please select target company in Tally to sync data");
+          }
+        } else {
+          let lstAltId = contentLastAlterIdTally.replace(/\"/g, "").split(",");
+          this.lastAlterIdMaster =
+            lstAltId.length >= 2 ? parseInt(lstAltId[0]) : 0;
+          this.lastAlterIdTransaction =
+            lstAltId.length >= 2 ? parseInt(lstAltId[1]) : 0;
 
-        logger.logMessage(
-          "Last AlterID Master: %d, Transaction: %d",
-          this.lastAlterIdMaster,
-          this.lastAlterIdTransaction
-        );
+          // fill-up invalid alterID with zero
+          if (isNaN(this.lastAlterIdMaster)) {
+            this.lastAlterIdMaster = 0;
+          }
+          if (isNaN(this.lastAlterIdTransaction)) {
+            this.lastAlterIdTransaction = 0;
+          }
+        }
         resolve();
       } catch (err) {
-        logger.logError("tally.updateLastAlterId()", err);
-        reject(err);
+        logger.logError("tally.importData()", err);
+        resolve();
       }
     });
-  }
-
-  async testConnection(): Promise<{ success: boolean; message: string }> {
-    return new Promise<{ success: boolean; message: string }>(
-      async (resolve) => {
-        try {
-          // Test basic connectivity to Tally server
-          const testRequest = new Promise<void>(
-            (resolveRequest, rejectRequest) => {
-              const req = http.request(
-                {
-                  hostname: this.config.server,
-                  port: this.config.port,
-                  path: "/",
-                  method: "GET",
-                  timeout: 10000, // 10 second timeout
-                },
-                (res) => {
-                  if (res.statusCode === 200 || res.statusCode === 404) {
-                    // 404 is expected for root path, but means server is responding
-                    resolveRequest();
-                  } else {
-                    rejectRequest(new Error(`HTTP ${res.statusCode}`));
-                  }
-                }
-              );
-
-              req.on("error", (err) => {
-                rejectRequest(err);
-              });
-
-              req.on("timeout", () => {
-                req.destroy();
-                rejectRequest(new Error("Connection timeout"));
-              });
-
-              req.end();
-            }
-          );
-
-          await testRequest;
-
-          // If we get here, basic connectivity is working
-          resolve({
-            success: true,
-            message: "Tally server is accessible and responding.",
-          });
-        } catch (err: any) {
-          let errorMessage = "";
-          if (err.code === "ECONNREFUSED") {
-            errorMessage =
-              "Unable to connect to Tally server on specified port";
-          } else if (err.code === "ENOTFOUND") {
-            errorMessage = "Unable to resolve Tally server hostname";
-          } else if (err.message && err.message.includes("timeout")) {
-            errorMessage = "Connection to Tally server timed out";
-          } else if (err.message && err.message.includes("HTTP")) {
-            errorMessage = `Tally server responded with error: ${err.message}`;
-          } else {
-            errorMessage = err.message || "Tally connection failed";
-          }
-
-          resolve({
-            success: false,
-            message: errorMessage,
-          });
-        }
-      }
-    );
   }
 
   private postTallyXML(msg: string): Promise<string> {

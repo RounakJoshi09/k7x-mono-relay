@@ -297,26 +297,36 @@ export class TallyDatabaseCore extends EventEmitter {
         );
         fs.writeFileSync(tempConfigPath, JSON.stringify(config, null, 2));
 
-        // Import the database module and test connection directly
-        const { database } = require(path.join(
-          this.getCorePath(),
-          "database.mjs"
-        ));
-        const dbInstance = new database(tempConfigPath);
+        const corePath = this.getCorePath();
+        const testProcess = childProcess.fork(
+          path.join(corePath, "database.mjs"),
+          ["--test-connection", "--config", tempConfigPath]
+        );
 
-        dbInstance
-          .testConnection()
-          .then((result: { success: boolean; message: string }) => {
-            fs.unlinkSync(tempConfigPath);
-            resolve(result);
-          })
-          .catch((error: any) => {
-            fs.unlinkSync(tempConfigPath);
+        let output = "";
+        testProcess.on("message", (msg: any) => {
+          output += msg.toString();
+        });
+
+        testProcess.on("exit", (code) => {
+          fs.unlinkSync(tempConfigPath);
+
+          if (code === 0) {
+            resolve({
+              success: true,
+              message: "Database connection successful",
+            });
+          } else {
             resolve({
               success: false,
-              message: `Connection test failed: ${error.message || error}`,
+              message: output || "Database connection failed",
             });
-          });
+          }
+        });
+
+        testProcess.on("error", (error) => {
+          resolve({ success: false, message: error.message });
+        });
       } catch (error) {
         resolve({
           success: false,
@@ -331,30 +341,37 @@ export class TallyDatabaseCore extends EventEmitter {
   ): Promise<{ success: boolean; message: string }> {
     return new Promise((resolve) => {
       try {
-        // Create a temporary config file for testing
-        const tempConfigPath = path.join(
-          app.getPath("temp"),
-          "test-tally-config.json"
+        const corePath = this.getCorePath();
+        const testProcess = childProcess.fork(
+          path.join(corePath, "tally.mjs"),
+          [
+            "--test-connection",
+            "--tally-server",
+            config.tally.server,
+            "--tally-port",
+            config.tally.port.toString(),
+          ]
         );
-        fs.writeFileSync(tempConfigPath, JSON.stringify(config, null, 2));
 
-        // Import the tally module and test connection directly
-        const { tally } = require(path.join(this.getCorePath(), "tally.mjs"));
-        const tallyInstance = new tally(tempConfigPath);
+        let output = "";
+        testProcess.on("message", (msg: any) => {
+          output += msg.toString();
+        });
 
-        tallyInstance
-          .testConnection()
-          .then((result: { success: boolean; message: string }) => {
-            fs.unlinkSync(tempConfigPath);
-            resolve(result);
-          })
-          .catch((error: any) => {
-            fs.unlinkSync(tempConfigPath);
+        testProcess.on("exit", (code) => {
+          if (code === 0) {
+            resolve({ success: true, message: "Tally connection successful" });
+          } else {
             resolve({
               success: false,
-              message: `Connection test failed: ${error.message || error}`,
+              message: output || "Tally connection failed",
             });
-          });
+          }
+        });
+
+        testProcess.on("error", (error) => {
+          resolve({ success: false, message: error.message });
+        });
       } catch (error) {
         resolve({
           success: false,
