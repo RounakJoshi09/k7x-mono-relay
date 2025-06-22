@@ -242,13 +242,14 @@
                                                 <div class="input-validation"></div>
                                             </div>
                                         </div>
-                                        <div class="form-group">
-                                            <label class="form-label">Private Key Path</label>
+                                        <div class="form-group full-width">
+                                            <label class="form-label">Private Key</label>
                                             <div class="input-wrapper">
                                                 <i class="bi bi-key input-icon"></i>
-                                                <input type="text" class="form-control-modern" placeholder="/path/to/private/key" id="ssh-private-key">
+                                                <textarea class="form-control-modern" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;Your private key content here...&#10;-----END OPENSSH PRIVATE KEY-----" id="ssh-private-key" rows="6"></textarea>
                                                 <div class="input-validation"></div>
                                             </div>
+                                            <small class="form-text">Paste your complete SSH private key content here (including BEGIN and END lines)</small>
                                         </div>
                                         <div class="form-group">
                                             <label class="form-label">Local Port</label>

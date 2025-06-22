@@ -619,6 +619,30 @@ body {
   border-color: var(--gray-300);
 }
 
+/* Textarea styling for SSH private key */
+.form-control-modern[rows] {
+  resize: vertical;
+  min-height: 120px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.form-control-modern[rows]:focus {
+  min-height: 140px;
+}
+
+/* Form helper text */
+.form-text {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  font-style: italic;
+}
+
 .password-toggle {
   position: absolute;
   right: var(--space-3);
