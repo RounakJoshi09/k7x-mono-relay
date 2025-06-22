@@ -404,6 +404,10 @@ export class TallyDatabaseCore extends EventEmitter {
     return { ...this.syncStatus };
   }
 
+  public isSyncRunning(): boolean {
+    return this.syncStatus.isRunning;
+  }
+
   public getDatabaseStructure(): string {
     try {
       const structurePath = app.isPackaged

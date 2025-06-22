@@ -718,6 +718,13 @@ class TallyDatabaseApp {
 
   async startSync() {
     try {
+      // Check if sync is already running
+      const isRunning = await window.tallyAPI.isSyncRunning();
+      if (isRunning) {
+        this.showToast("Info", "Sync is already running", "info");
+        return;
+      }
+
       const config = this.getConfigFromForm();
 
       // Validate configuration first
@@ -731,7 +738,14 @@ class TallyDatabaseApp {
         return;
       }
 
-      await window.tallyAPI.startSync(config);
+      const result = await window.tallyAPI.startSync(config);
+
+      // Check if there's an error response (e.g., sync already running)
+      if (result && result.error) {
+        this.showToast("Info", result.error, "info");
+        return;
+      }
+
       this.updateSyncButtons(true);
       this.showToast("Info", "Sync started", "info");
     } catch (error) {
@@ -829,8 +843,33 @@ class TallyDatabaseApp {
   }
 
   updateSyncButtons(isRunning) {
-    document.getElementById("start-sync").disabled = isRunning;
-    document.getElementById("stop-sync").disabled = !isRunning;
+    const startButton = document.getElementById("start-sync");
+    const stopButton = document.getElementById("stop-sync");
+
+    if (startButton) {
+      startButton.disabled = isRunning;
+      const icon = startButton.querySelector("i");
+
+      // The text is a direct text node, not wrapped in a span
+      // We need to find the text node between the icon and the ripple div
+      const textNode = Array.from(startButton.childNodes).find(
+        (node) =>
+          node.nodeType === Node.TEXT_NODE &&
+          node.textContent.trim() === "Start Synchronization"
+      );
+
+      if (isRunning) {
+        if (icon) icon.className = "bi bi-pause-fill";
+        if (textNode) textNode.textContent = " Sync Running...";
+      } else {
+        if (icon) icon.className = "bi bi-play-fill";
+        if (textNode) textNode.textContent = " Start Synchronization";
+      }
+    }
+
+    if (stopButton) {
+      stopButton.disabled = !isRunning;
+    }
   }
 
   addLogMessage(message) {

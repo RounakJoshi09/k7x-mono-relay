@@ -41,6 +41,9 @@ const electron_updater_1 = require("electron-updater");
 const path = __importStar(require("path"));
 const electron_store_1 = __importDefault(require("electron-store"));
 const core_bridge_1 = require("./core-bridge");
+// For Windows startup functionality
+const child_process_1 = require("child_process");
+const os_1 = require("os");
 class TallyDatabaseLoaderApp {
     constructor() {
         this.mainWindow = null;
@@ -55,10 +58,12 @@ class TallyDatabaseLoaderApp {
     }
     setupApp() {
         // This method will be called when Electron has finished initialization
-        electron_1.app.whenReady().then(() => {
+        electron_1.app.whenReady().then(async () => {
             this.createWindow();
             this.createMenu();
             this.createTray();
+            // Check if background sync should start automatically
+            await this.checkAndStartBackgroundSync();
             electron_1.app.on("activate", () => {
                 if (electron_1.BrowserWindow.getAllWindows().length === 0) {
                     this.createWindow();
@@ -273,9 +278,23 @@ class TallyDatabaseLoaderApp {
         electron_1.ipcMain.handle("test-tally-connection", (_, config) => this.tallyCore.testTallyConnection(config));
         electron_1.ipcMain.handle("get-tally-companies", (_, config) => this.tallyCore.getTallyCompanies(config));
         // Sync operations
-        electron_1.ipcMain.handle("start-sync", (_, config) => this.tallyCore.startSync(config));
+        electron_1.ipcMain.handle("start-sync", async (_, config) => {
+            try {
+                return await this.tallyCore.startSync(config);
+            }
+            catch (error) {
+                // Handle the specific case where sync is already running
+                if (error instanceof Error &&
+                    error.message === "Sync is already running") {
+                    return { error: "Sync is already running" };
+                }
+                // Re-throw other errors
+                throw error;
+            }
+        });
         electron_1.ipcMain.handle("stop-sync", () => this.tallyCore.stopSync());
         electron_1.ipcMain.handle("get-sync-status", () => this.tallyCore.getSyncStatus());
+        electron_1.ipcMain.handle("is-sync-running", () => this.tallyCore.isSyncRunning());
         // File operations
         electron_1.ipcMain.handle("select-file", async (_, options) => {
             const result = await electron_1.dialog.showOpenDialog(this.mainWindow, options);
@@ -296,6 +315,19 @@ class TallyDatabaseLoaderApp {
         // Log operations
         electron_1.ipcMain.handle("get-logs", () => this.tallyCore.getLogs());
         electron_1.ipcMain.handle("clear-logs", () => this.tallyCore.clearLogs());
+        // Startup management
+        electron_1.ipcMain.handle("enable-startup", async () => {
+            const success = await this.enableStartupWithWindows();
+            return { success };
+        });
+        electron_1.ipcMain.handle("disable-startup", async () => {
+            const success = await this.disableStartupWithWindows();
+            return { success };
+        });
+        electron_1.ipcMain.handle("is-startup-enabled", async () => {
+            const enabled = await this.isStartupEnabled();
+            return { enabled };
+        });
         // Listen for sync progress updates
         this.tallyCore.on("sync-progress", (data) => {
             this.mainWindow?.webContents.send("sync-progress", data);
@@ -385,6 +417,103 @@ class TallyDatabaseLoaderApp {
             detail: `Version: ${electron_1.app.getVersion()}\n\nA desktop application for synchronizing Tally Prime data with various databases.\n\n© 2024 Tally Database Loader Team`,
         });
     }
+    // Startup Management Methods
+    async enableStartupWithWindows() {
+        if ((0, os_1.platform)() !== "win32") {
+            return false;
+        }
+        try {
+            const appPath = electron_1.app.getPath("exe");
+            const startupKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+            const appName = "TallyDatabaseLoader";
+            const command = `reg add "${startupKey}" /v "${appName}" /t REG_SZ /d "${appPath}" /f`;
+            return new Promise((resolve) => {
+                (0, child_process_1.exec)(command, (error) => {
+                    if (error) {
+                        console.error("Failed to enable startup:", error);
+                        resolve(false);
+                    }
+                    else {
+                        console.log("Startup enabled successfully");
+                        resolve(true);
+                    }
+                });
+            });
+        }
+        catch (error) {
+            console.error("Error enabling startup:", error);
+            return false;
+        }
+    }
+    async disableStartupWithWindows() {
+        if ((0, os_1.platform)() !== "win32") {
+            return false;
+        }
+        try {
+            const startupKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+            const appName = "TallyDatabaseLoader";
+            const command = `reg delete "${startupKey}" /v "${appName}" /f`;
+            return new Promise((resolve) => {
+                (0, child_process_1.exec)(command, (error) => {
+                    if (error) {
+                        console.error("Failed to disable startup:", error);
+                        resolve(false);
+                    }
+                    else {
+                        console.log("Startup disabled successfully");
+                        resolve(true);
+                    }
+                });
+            });
+        }
+        catch (error) {
+            console.error("Error disabling startup:", error);
+            return false;
+        }
+    }
+    async isStartupEnabled() {
+        if ((0, os_1.platform)() !== "win32") {
+            return false;
+        }
+        try {
+            const startupKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+            const appName = "TallyDatabaseLoader";
+            const command = `reg query "${startupKey}" /v "${appName}"`;
+            return new Promise((resolve) => {
+                (0, child_process_1.exec)(command, (error) => {
+                    resolve(!error);
+                });
+            });
+        }
+        catch (error) {
+            return false;
+        }
+    }
+    async checkAndStartBackgroundSync() {
+        try {
+            const config = this.tallyCore.loadConfiguration();
+            const hasBackgroundSync = config.tally.frequency > 0 && config.tally.sync === "incremental";
+            const startMinimized = this.store.get("startMinimized") === true;
+            if (hasBackgroundSync) {
+                // Start background sync automatically
+                await this.tallyCore.startSync(config);
+                // Hide window if it exists or if start minimized is enabled
+                if (this.mainWindow && (startMinimized || hasBackgroundSync)) {
+                    this.mainWindow.hide();
+                }
+                // Show notification
+                this.showBackgroundNotification();
+                console.log(`Background sync started with frequency: ${config.tally.frequency} minutes`);
+            }
+            else if (startMinimized && this.mainWindow) {
+                // If no background sync but start minimized is enabled, just hide the window
+                this.mainWindow.hide();
+            }
+        }
+        catch (error) {
+            console.error("Error starting background sync:", error);
+        }
+    }
     createTray() {
         // Create tray icon for system tray
         const iconPath = path.join(__dirname, "assets/icon.png");
@@ -420,6 +549,42 @@ class TallyDatabaseLoaderApp {
                         });
                     }
                 },
+            },
+            { type: "separator" },
+            {
+                label: "Startup Settings",
+                submenu: [
+                    {
+                        label: "Enable Auto-Start",
+                        click: async () => {
+                            const result = await this.enableStartupWithWindows();
+                            if (result) {
+                                if (this.tray) {
+                                    this.tray.displayBalloon({
+                                        title: "Startup Enabled",
+                                        content: "App will start automatically with Windows",
+                                        icon: electron_1.nativeImage.createFromPath(path.join(__dirname, "assets/icon.png")),
+                                    });
+                                }
+                            }
+                        },
+                    },
+                    {
+                        label: "Disable Auto-Start",
+                        click: async () => {
+                            const result = await this.disableStartupWithWindows();
+                            if (result) {
+                                if (this.tray) {
+                                    this.tray.displayBalloon({
+                                        title: "Startup Disabled",
+                                        content: "App will no longer start automatically",
+                                        icon: electron_1.nativeImage.createFromPath(path.join(__dirname, "assets/icon.png")),
+                                    });
+                                }
+                            }
+                        },
+                    },
+                ],
             },
             { type: "separator" },
             {

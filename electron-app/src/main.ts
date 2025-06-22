@@ -299,11 +299,24 @@ class TallyDatabaseLoaderApp {
     );
 
     // Sync operations
-    ipcMain.handle("start-sync", (_, config) =>
-      this.tallyCore.startSync(config)
-    );
+    ipcMain.handle("start-sync", async (_, config) => {
+      try {
+        return await this.tallyCore.startSync(config);
+      } catch (error) {
+        // Handle the specific case where sync is already running
+        if (
+          error instanceof Error &&
+          error.message === "Sync is already running"
+        ) {
+          return { error: "Sync is already running" };
+        }
+        // Re-throw other errors
+        throw error;
+      }
+    });
     ipcMain.handle("stop-sync", () => this.tallyCore.stopSync());
     ipcMain.handle("get-sync-status", () => this.tallyCore.getSyncStatus());
+    ipcMain.handle("is-sync-running", () => this.tallyCore.isSyncRunning());
 
     // File operations
     ipcMain.handle("select-file", async (_, options) => {
@@ -547,13 +560,14 @@ class TallyDatabaseLoaderApp {
       const config = this.tallyCore.loadConfiguration();
       const hasBackgroundSync =
         config.tally.frequency > 0 && config.tally.sync === "incremental";
+      const startMinimized = this.store.get("startMinimized") === true;
 
       if (hasBackgroundSync) {
         // Start background sync automatically
         await this.tallyCore.startSync(config);
 
-        // Hide window if it exists
-        if (this.mainWindow) {
+        // Hide window if it exists or if start minimized is enabled
+        if (this.mainWindow && (startMinimized || hasBackgroundSync)) {
           this.mainWindow.hide();
         }
 
@@ -563,6 +577,9 @@ class TallyDatabaseLoaderApp {
         console.log(
           `Background sync started with frequency: ${config.tally.frequency} minutes`
         );
+      } else if (startMinimized && this.mainWindow) {
+        // If no background sync but start minimized is enabled, just hide the window
+        this.mainWindow.hide();
       }
     } catch (error) {
       console.error("Error starting background sync:", error);

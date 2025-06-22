@@ -17,6 +17,7 @@ const api = {
     startSync: (config) => electron_1.ipcRenderer.invoke("start-sync", config),
     stopSync: () => electron_1.ipcRenderer.invoke("stop-sync"),
     getSyncStatus: () => electron_1.ipcRenderer.invoke("get-sync-status"),
+    isSyncRunning: () => electron_1.ipcRenderer.invoke("is-sync-running"),
     // File operations
     selectFile: (options) => electron_1.ipcRenderer.invoke("select-file", options),
     saveFile: (options) => electron_1.ipcRenderer.invoke("save-file", options),
@@ -31,6 +32,10 @@ const api = {
     // Log operations
     getLogs: () => electron_1.ipcRenderer.invoke("get-logs"),
     clearLogs: () => electron_1.ipcRenderer.invoke("clear-logs"),
+    // Startup management
+    enableStartup: () => electron_1.ipcRenderer.invoke("enable-startup"),
+    disableStartup: () => electron_1.ipcRenderer.invoke("disable-startup"),
+    isStartupEnabled: () => electron_1.ipcRenderer.invoke("is-startup-enabled"),
     // Event listeners
     onSyncProgress: (callback) => {
         electron_1.ipcRenderer.on("sync-progress", (_, data) => callback(data));

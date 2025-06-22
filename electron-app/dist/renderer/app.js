@@ -28,9 +28,9 @@ class TallyDatabaseApp {
     if (this.initialized) return;
 
     try {
-      // Initialize the application
-      // await this.loadAppVersion(); // Commented out - not used in new design
+      await this.loadAppVersion();
       await this.loadConfiguration();
+      await this.loadStartupSettings();
       this.setupEventListeners();
       this.setupIPCListeners();
       this.updateUI();
@@ -39,7 +39,7 @@ class TallyDatabaseApp {
 
       console.log("Tally Database Loader initialized successfully");
     } catch (error) {
-      console.error("Failed to initialize application:", error);
+      console.error("Initialization error:", error);
       this.showToast("Error", "Failed to initialize application", "error");
     }
   }
@@ -189,6 +189,15 @@ class TallyDatabaseApp {
     document
       .getElementById("ssh-enabled")
       .addEventListener("change", this.onSSHToggle.bind(this));
+
+    // Startup settings
+    document
+      .getElementById("auto-startup")
+      .addEventListener("change", this.onStartupToggle.bind(this));
+
+    document
+      .getElementById("start-minimized")
+      .addEventListener("change", this.onStartMinimizedToggle.bind(this));
 
     // SSH password toggle
     document.addEventListener("click", (e) => {
@@ -466,6 +475,69 @@ class TallyDatabaseApp {
     sshConfig.style.display = enabled ? "block" : "none";
   }
 
+  async onStartupToggle() {
+    const enabled = document.getElementById("auto-startup").checked;
+
+    try {
+      if (enabled) {
+        const result = await window.tallyAPI.enableStartup();
+        if (result.success) {
+          this.showToast(
+            "Success",
+            "Auto-start enabled. App will start with Windows.",
+            "success"
+          );
+        } else {
+          this.showToast("Error", "Failed to enable auto-start", "error");
+          document.getElementById("auto-startup").checked = false;
+        }
+      } else {
+        const result = await window.tallyAPI.disableStartup();
+        if (result.success) {
+          this.showToast("Success", "Auto-start disabled.", "success");
+        } else {
+          this.showToast("Error", "Failed to disable auto-start", "error");
+          document.getElementById("auto-startup").checked = true;
+        }
+      }
+    } catch (error) {
+      console.error("Startup toggle error:", error);
+      this.showToast("Error", "Failed to update startup settings", "error");
+    }
+  }
+
+  async onStartMinimizedToggle() {
+    const enabled = document.getElementById("start-minimized").checked;
+
+    try {
+      // Save the setting to local storage
+      await window.tallyAPI.storeSet("startMinimized", enabled);
+      this.showToast(
+        "Success",
+        `Start minimized ${enabled ? "enabled" : "disabled"}`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Start minimized toggle error:", error);
+      this.showToast("Error", "Failed to save setting", "error");
+    }
+  }
+
+  async loadStartupSettings() {
+    try {
+      // Check if startup is enabled
+      const startupResult = await window.tallyAPI.isStartupEnabled();
+      document.getElementById("auto-startup").checked = startupResult.enabled;
+
+      // Load start minimized setting
+      const startMinimized = await window.tallyAPI.storeGet("startMinimized");
+      document.getElementById("start-minimized").checked =
+        startMinimized === true;
+    } catch (error) {
+      console.error("Error loading startup settings:", error);
+    }
+  }
+
   async testDatabaseConnection() {
     const button = document.getElementById("test-db-connection");
     if (!button || button.disabled) return;
@@ -646,6 +718,13 @@ class TallyDatabaseApp {
 
   async startSync() {
     try {
+      // Check if sync is already running
+      const isRunning = await window.tallyAPI.isSyncRunning();
+      if (isRunning) {
+        this.showToast("Info", "Sync is already running", "info");
+        return;
+      }
+
       const config = this.getConfigFromForm();
 
       // Validate configuration first
@@ -659,7 +738,14 @@ class TallyDatabaseApp {
         return;
       }
 
-      await window.tallyAPI.startSync(config);
+      const result = await window.tallyAPI.startSync(config);
+
+      // Check if there's an error response (e.g., sync already running)
+      if (result && result.error) {
+        this.showToast("Info", result.error, "info");
+        return;
+      }
+
       this.updateSyncButtons(true);
       this.showToast("Info", "Sync started", "info");
     } catch (error) {
@@ -757,8 +843,33 @@ class TallyDatabaseApp {
   }
 
   updateSyncButtons(isRunning) {
-    document.getElementById("start-sync").disabled = isRunning;
-    document.getElementById("stop-sync").disabled = !isRunning;
+    const startButton = document.getElementById("start-sync");
+    const stopButton = document.getElementById("stop-sync");
+
+    if (startButton) {
+      startButton.disabled = isRunning;
+      const icon = startButton.querySelector("i");
+
+      // The text is a direct text node, not wrapped in a span
+      // We need to find the text node between the icon and the ripple div
+      const textNode = Array.from(startButton.childNodes).find(
+        (node) =>
+          node.nodeType === Node.TEXT_NODE &&
+          node.textContent.trim() === "Start Synchronization"
+      );
+
+      if (isRunning) {
+        if (icon) icon.className = "bi bi-pause-fill";
+        if (textNode) textNode.textContent = " Sync Running...";
+      } else {
+        if (icon) icon.className = "bi bi-play-fill";
+        if (textNode) textNode.textContent = " Start Synchronization";
+      }
+    }
+
+    if (stopButton) {
+      stopButton.disabled = !isRunning;
+    }
   }
 
   addLogMessage(message) {

@@ -328,6 +328,9 @@ class TallyDatabaseCore extends events_1.EventEmitter {
     getSyncStatus() {
         return { ...this.syncStatus };
     }
+    isSyncRunning() {
+        return this.syncStatus.isRunning;
+    }
     getDatabaseStructure() {
         try {
             const structurePath = electron_1.app.isPackaged

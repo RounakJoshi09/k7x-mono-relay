@@ -22,9 +22,10 @@ interface TallyDatabaseAPI {
   getTallyCompanies: (config: any) => Promise<string[]>;
 
   // Sync operations
-  startSync: (config: any) => Promise<void>;
+  startSync: (config: any) => Promise<void | { error: string }>;
   stopSync: () => Promise<void>;
   getSyncStatus: () => Promise<any>;
+  isSyncRunning: () => Promise<boolean>;
 
   // File operations
   selectFile: (options: any) => Promise<string>;
@@ -43,6 +44,11 @@ interface TallyDatabaseAPI {
   // Log operations
   getLogs: () => Promise<string>;
   clearLogs: () => Promise<void>;
+
+  // Startup management
+  enableStartup: () => Promise<{ success: boolean }>;
+  disableStartup: () => Promise<{ success: boolean }>;
+  isStartupEnabled: () => Promise<{ enabled: boolean }>;
 
   // Event listeners
   onSyncProgress: (callback: (data: any) => void) => void;
@@ -77,6 +83,7 @@ const api: TallyDatabaseAPI = {
   startSync: (config) => ipcRenderer.invoke("start-sync", config),
   stopSync: () => ipcRenderer.invoke("stop-sync"),
   getSyncStatus: () => ipcRenderer.invoke("get-sync-status"),
+  isSyncRunning: () => ipcRenderer.invoke("is-sync-running"),
 
   // File operations
   selectFile: (options) => ipcRenderer.invoke("select-file", options),
@@ -95,6 +102,11 @@ const api: TallyDatabaseAPI = {
   // Log operations
   getLogs: () => ipcRenderer.invoke("get-logs"),
   clearLogs: () => ipcRenderer.invoke("clear-logs"),
+
+  // Startup management
+  enableStartup: () => ipcRenderer.invoke("enable-startup"),
+  disableStartup: () => ipcRenderer.invoke("disable-startup"),
+  isStartupEnabled: () => ipcRenderer.invoke("is-startup-enabled"),
 
   // Event listeners
   onSyncProgress: (callback) => {
