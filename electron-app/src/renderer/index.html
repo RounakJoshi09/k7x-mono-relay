@@ -338,6 +338,26 @@
                                             <option value="incremental">Incremental</option>
                                         </select>
                                     </div>
+
+                                    <!-- Frequency Configuration -->
+                                    <div class="form-section" id="frequency-section">
+                                        <h3 class="section-title">
+                                            <i class="bi bi-clock"></i>Auto Sync Frequency
+                                        </h3>
+                                        <div class="form-group">
+                                            <label class="form-label">Sync Interval (Minutes)</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-stopwatch input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="0" min="0" max="1440" id="sync-frequency">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                            <small class="form-text">
+                                                <i class="bi bi-info-circle"></i>
+                                                Set to 0 for manual sync only. For incremental sync, specify minutes between automatic syncs (e.g., 5 for every 5 minutes). 
+                                                <strong>Auto sync runs in background even when app is closed.</strong>
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Date Range Configuration -->

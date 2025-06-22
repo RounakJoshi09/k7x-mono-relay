@@ -55,7 +55,7 @@ class TallyDatabaseCore extends events_1.EventEmitter {
     getConfigPath() {
         const resourcesPath = electron_1.app.isPackaged
             ? path.join(process.resourcesPath, "config.json")
-            : path.join(__dirname, "../../config.json");
+            : path.join(__dirname, "../config.json");
         const userDataPath = path.join(electron_1.app.getPath("userData"), "config.json");
         // Copy default config to user data if it doesn't exist
         if (!fs.existsSync(userDataPath) && fs.existsSync(resourcesPath)) {

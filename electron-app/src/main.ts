@@ -1,4 +1,13 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  shell,
+  Tray,
+  nativeImage,
+} from "electron";
 import { autoUpdater } from "electron-updater";
 import * as path from "path";
 import * as fs from "fs";
@@ -10,6 +19,8 @@ class TallyDatabaseLoaderApp {
   private store: Store;
   private tallyCore: TallyDatabaseCore;
   private isDev: boolean;
+  private tray: Tray | null = null;
+  private isQuitting = false;
 
   constructor() {
     this.isDev = process.argv.includes("--dev");
@@ -26,6 +37,7 @@ class TallyDatabaseLoaderApp {
     app.whenReady().then(() => {
       this.createWindow();
       this.createMenu();
+      this.createTray();
 
       app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -35,12 +47,40 @@ class TallyDatabaseLoaderApp {
     });
 
     app.on("window-all-closed", () => {
-      if (process.platform !== "darwin") {
+      // Don't quit the app when all windows are closed
+      // Allow it to continue running in background for scheduled sync
+      if (process.platform === "darwin" && !this.isQuitting) {
+        // On macOS, apps typically stay running even when all windows are closed
+        return;
+      }
+
+      // On Windows/Linux, only quit if not running background sync
+      const config = this.tallyCore.loadConfiguration();
+      const hasBackgroundSync =
+        config.tally.frequency > 0 && config.tally.sync === "incremental";
+
+      if (!hasBackgroundSync || this.isQuitting) {
         app.quit();
       }
     });
 
-    app.on("before-quit", () => {
+    app.on("before-quit", (event) => {
+      const config = this.tallyCore.loadConfiguration();
+      const hasBackgroundSync =
+        config.tally.frequency > 0 && config.tally.sync === "incremental";
+
+      if (hasBackgroundSync && !this.isQuitting) {
+        event.preventDefault();
+        this.isQuitting = true;
+
+        if (this.mainWindow) {
+          this.mainWindow.hide();
+        }
+
+        this.showBackgroundNotification();
+        return;
+      }
+
       this.tallyCore.cleanup();
     });
   }
@@ -71,6 +111,19 @@ class TallyDatabaseLoaderApp {
 
     this.mainWindow.once("ready-to-show", () => {
       this.mainWindow?.show();
+    });
+
+    this.mainWindow.on("close", (event) => {
+      const config = this.tallyCore.loadConfiguration();
+      const hasBackgroundSync =
+        config.tally.frequency > 0 && config.tally.sync === "incremental";
+
+      if (hasBackgroundSync && !this.isQuitting) {
+        event.preventDefault();
+        this.mainWindow?.hide();
+        this.showBackgroundNotification();
+        return;
+      }
     });
 
     this.mainWindow.on("closed", () => {
@@ -382,6 +435,83 @@ class TallyDatabaseLoaderApp {
       message: "Tally Database Loader",
       detail: `Version: ${app.getVersion()}\n\nA desktop application for synchronizing Tally Prime data with various databases.\n\n© 2024 Tally Database Loader Team`,
     });
+  }
+
+  private createTray() {
+    // Create tray icon for system tray
+    const iconPath = path.join(__dirname, "assets/icon.png");
+    const trayIcon = nativeImage
+      .createFromPath(iconPath)
+      .resize({ width: 16, height: 16 });
+
+    this.tray = new Tray(trayIcon);
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Show App",
+        click: () => {
+          if (this.mainWindow) {
+            this.mainWindow.show();
+            this.mainWindow.focus();
+          } else {
+            this.createWindow();
+          }
+        },
+      },
+      {
+        label: "Sync Status",
+        click: () => {
+          const status = this.tallyCore.getSyncStatus();
+          const message = status.isRunning
+            ? `Sync in progress: ${status.message}`
+            : `Ready - Last sync: ${status.endTime || "Never"}`;
+
+          if (this.mainWindow) {
+            this.mainWindow.webContents.send("show-toast", {
+              title: "Sync Status",
+              message: message,
+              type: "info",
+            });
+          }
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          this.isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    this.tray.setContextMenu(contextMenu);
+    this.tray.setToolTip("Tally Database Loader - Background Sync Active");
+
+    // Double-click to show window
+    this.tray.on("double-click", () => {
+      if (this.mainWindow) {
+        this.mainWindow.show();
+        this.mainWindow.focus();
+      } else {
+        this.createWindow();
+      }
+    });
+  }
+
+  private showBackgroundNotification() {
+    // Show notification that app is running in background
+    const config = this.tallyCore.loadConfiguration();
+
+    if (this.tray) {
+      this.tray.displayBalloon({
+        title: "Tally Database Loader",
+        content: `Background sync enabled. Syncing every ${config.tally.frequency} minutes. Right-click tray icon for options.`,
+        icon: nativeImage.createFromPath(
+          path.join(__dirname, "assets/icon.png")
+        ),
+      });
+    }
   }
 }
 

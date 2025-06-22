@@ -813,6 +813,39 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+/* Frequency Section - Initially Hidden */
+#frequency-section {
+  display: none;
+  animation: fadeInUp 0.3s ease;
+}
+
+#frequency-section.show {
+  display: block;
+}
+
+#frequency-section .form-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--gray-600);
+  font-size: 0.875rem;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-500);
+}
+
+#frequency-section .form-text i {
+  color: var(--primary-500);
+  flex-shrink: 0;
+}
+
+#frequency-section .form-text strong {
+  color: var(--primary-700);
+  font-weight: 600;
+}
+
 /* Performance Settings */
 .performance-grid {
   display: grid;

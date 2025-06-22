@@ -72,7 +72,7 @@ export class TallyDatabaseCore extends EventEmitter {
   private getConfigPath(): string {
     const resourcesPath = app.isPackaged
       ? path.join(process.resourcesPath, "config.json")
-      : path.join(__dirname, "../../config.json");
+      : path.join(__dirname, "../config.json");
 
     const userDataPath = path.join(app.getPath("userData"), "config.json");
 

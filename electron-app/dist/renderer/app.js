@@ -429,6 +429,19 @@ class TallyDatabaseApp {
         ? "tally-export-config-incremental.yaml"
         : "tally-export-config.yaml";
     document.getElementById("definition-file").value = definitionFile;
+
+    // Show/hide frequency section based on sync mode
+    const frequencySection = document.getElementById("frequency-section");
+    if (frequencySection) {
+      frequencySection.style.display =
+        syncMode === "incremental" ? "block" : "none";
+    }
+
+    // Update helper text and validation for frequency field
+    const frequencyInput = document.getElementById("sync-frequency");
+    if (frequencyInput && syncMode === "full") {
+      frequencyInput.value = "0";
+    }
   }
 
   onDateRangeChange() {
