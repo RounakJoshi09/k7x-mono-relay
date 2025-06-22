@@ -14,6 +14,10 @@ import * as fs from "fs";
 import Store from "electron-store";
 import { TallyDatabaseCore } from "./core-bridge";
 
+// For Windows startup functionality
+import { exec } from "child_process";
+import { platform } from "os";
+
 class TallyDatabaseLoaderApp {
   private mainWindow: BrowserWindow | null = null;
   private store: Store;
@@ -34,10 +38,13 @@ class TallyDatabaseLoaderApp {
 
   private setupApp() {
     // This method will be called when Electron has finished initialization
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
       this.createWindow();
       this.createMenu();
       this.createTray();
+
+      // Check if background sync should start automatically
+      await this.checkAndStartBackgroundSync();
 
       app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -325,6 +332,22 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("get-logs", () => this.tallyCore.getLogs());
     ipcMain.handle("clear-logs", () => this.tallyCore.clearLogs());
 
+    // Startup management
+    ipcMain.handle("enable-startup", async () => {
+      const success = await this.enableStartupWithWindows();
+      return { success };
+    });
+
+    ipcMain.handle("disable-startup", async () => {
+      const success = await this.disableStartupWithWindows();
+      return { success };
+    });
+
+    ipcMain.handle("is-startup-enabled", async () => {
+      const enabled = await this.isStartupEnabled();
+      return { enabled };
+    });
+
     // Listen for sync progress updates
     this.tallyCore.on("sync-progress", (data: any) => {
       this.mainWindow?.webContents.send("sync-progress", data);
@@ -437,6 +460,115 @@ class TallyDatabaseLoaderApp {
     });
   }
 
+  // Startup Management Methods
+  private async enableStartupWithWindows(): Promise<boolean> {
+    if (platform() !== "win32") {
+      return false;
+    }
+
+    try {
+      const appPath = app.getPath("exe");
+      const startupKey =
+        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+      const appName = "TallyDatabaseLoader";
+
+      const command = `reg add "${startupKey}" /v "${appName}" /t REG_SZ /d "${appPath}" /f`;
+
+      return new Promise((resolve) => {
+        exec(command, (error) => {
+          if (error) {
+            console.error("Failed to enable startup:", error);
+            resolve(false);
+          } else {
+            console.log("Startup enabled successfully");
+            resolve(true);
+          }
+        });
+      });
+    } catch (error) {
+      console.error("Error enabling startup:", error);
+      return false;
+    }
+  }
+
+  private async disableStartupWithWindows(): Promise<boolean> {
+    if (platform() !== "win32") {
+      return false;
+    }
+
+    try {
+      const startupKey =
+        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+      const appName = "TallyDatabaseLoader";
+
+      const command = `reg delete "${startupKey}" /v "${appName}" /f`;
+
+      return new Promise((resolve) => {
+        exec(command, (error) => {
+          if (error) {
+            console.error("Failed to disable startup:", error);
+            resolve(false);
+          } else {
+            console.log("Startup disabled successfully");
+            resolve(true);
+          }
+        });
+      });
+    } catch (error) {
+      console.error("Error disabling startup:", error);
+      return false;
+    }
+  }
+
+  private async isStartupEnabled(): Promise<boolean> {
+    if (platform() !== "win32") {
+      return false;
+    }
+
+    try {
+      const startupKey =
+        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+      const appName = "TallyDatabaseLoader";
+
+      const command = `reg query "${startupKey}" /v "${appName}"`;
+
+      return new Promise((resolve) => {
+        exec(command, (error) => {
+          resolve(!error);
+        });
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+
+  private async checkAndStartBackgroundSync(): Promise<void> {
+    try {
+      const config = this.tallyCore.loadConfiguration();
+      const hasBackgroundSync =
+        config.tally.frequency > 0 && config.tally.sync === "incremental";
+
+      if (hasBackgroundSync) {
+        // Start background sync automatically
+        await this.tallyCore.startSync(config);
+
+        // Hide window if it exists
+        if (this.mainWindow) {
+          this.mainWindow.hide();
+        }
+
+        // Show notification
+        this.showBackgroundNotification();
+
+        console.log(
+          `Background sync started with frequency: ${config.tally.frequency} minutes`
+        );
+      }
+    } catch (error) {
+      console.error("Error starting background sync:", error);
+    }
+  }
+
   private createTray() {
     // Create tray icon for system tray
     const iconPath = path.join(__dirname, "assets/icon.png");
@@ -474,6 +606,46 @@ class TallyDatabaseLoaderApp {
             });
           }
         },
+      },
+      { type: "separator" },
+      {
+        label: "Startup Settings",
+        submenu: [
+          {
+            label: "Enable Auto-Start",
+            click: async () => {
+              const result = await this.enableStartupWithWindows();
+              if (result) {
+                if (this.tray) {
+                  this.tray.displayBalloon({
+                    title: "Startup Enabled",
+                    content: "App will start automatically with Windows",
+                    icon: nativeImage.createFromPath(
+                      path.join(__dirname, "assets/icon.png")
+                    ),
+                  });
+                }
+              }
+            },
+          },
+          {
+            label: "Disable Auto-Start",
+            click: async () => {
+              const result = await this.disableStartupWithWindows();
+              if (result) {
+                if (this.tray) {
+                  this.tray.displayBalloon({
+                    title: "Startup Disabled",
+                    content: "App will no longer start automatically",
+                    icon: nativeImage.createFromPath(
+                      path.join(__dirname, "assets/icon.png")
+                    ),
+                  });
+                }
+              }
+            },
+          },
+        ],
       },
       { type: "separator" },
       {
