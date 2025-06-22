@@ -124,11 +124,11 @@ class _tally {
             logger.logMessage("Acquiring last AlterID from database");
             let lastAlterIdMasterDatabase =
               await getDatabaseInstance().executeScalar<number>(
-                `select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Master'`
+                `select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Master'`
               );
             let lastAlterIdTransactionDatabase =
               await getDatabaseInstance().executeScalar<number>(
-                `select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Transaction'`
+                `select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Transaction'`
               );
 
             //update active company information before starting import

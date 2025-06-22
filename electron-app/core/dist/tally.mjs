@@ -103,8 +103,8 @@ class _tally {
                         fs.mkdirSync("./csv");
                         //acquire last AlterID of master & transaction from last sync version of Database
                         logger.logMessage("Acquiring last AlterID from database");
-                        let lastAlterIdMasterDatabase = await getDatabaseInstance().executeScalar(`select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Master'`);
-                        let lastAlterIdTransactionDatabase = await getDatabaseInstance().executeScalar(`select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Transaction'`);
+                        let lastAlterIdMasterDatabase = await getDatabaseInstance().executeScalar(`select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Master'`);
+                        let lastAlterIdTransactionDatabase = await getDatabaseInstance().executeScalar(`select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Transaction'`);
                         //update active company information before starting import
                         logger.logMessage("Updating company information configuration table [%s]", new Date().toLocaleDateString());
                         await this.saveCompanyInfo();

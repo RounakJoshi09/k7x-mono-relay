@@ -281,6 +281,7 @@ body {
 }
 
 .status-ready { background: var(--success-500); }
+.status-success { background: var(--success-500); }
 .status-error { background: var(--danger-500); }
 .status-warning { background: var(--warning-500); }
 

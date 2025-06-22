@@ -2,6 +2,11 @@
 
 class TallyDatabaseApp {
   constructor() {
+    // Prevent multiple initializations
+    if (window.tallyDatabaseAppInstance) {
+      return window.tallyDatabaseAppInstance;
+    }
+
     this.config = null;
     this.syncStatus = {
       isRunning: false,
@@ -10,10 +15,18 @@ class TallyDatabaseApp {
       message: "Ready",
     };
 
+    // Flag to prevent duplicate event listeners
+    this.initialized = false;
+
     this.init();
+
+    // Store instance globally to prevent multiple instances
+    window.tallyDatabaseAppInstance = this;
   }
 
   async init() {
+    if (this.initialized) return;
+
     try {
       // Initialize the application
       // await this.loadAppVersion(); // Commented out - not used in new design
@@ -21,6 +34,8 @@ class TallyDatabaseApp {
       this.setupEventListeners();
       this.setupIPCListeners();
       this.updateUI();
+
+      this.initialized = true;
 
       console.log("Tally Database Loader initialized successfully");
     } catch (error) {
@@ -104,14 +119,30 @@ class TallyDatabaseApp {
     document
       .getElementById("db-technology")
       .addEventListener("change", this.onDatabaseTechnologyChange.bind(this));
-    document
-      .getElementById("test-db-connection")
-      .addEventListener("click", this.testDatabaseConnection.bind(this));
+
+    // Test Database Connection - ensure only one listener
+    const testDbButton = document.getElementById("test-db-connection");
+    if (testDbButton && !testDbButton.hasAttribute("data-listener-attached")) {
+      testDbButton.setAttribute("data-listener-attached", "true");
+      testDbButton.addEventListener(
+        "click",
+        this.testDatabaseConnection.bind(this)
+      );
+    }
 
     // Tally form events
-    document
-      .getElementById("test-tally-connection")
-      .addEventListener("click", this.testTallyConnection.bind(this));
+    const testTallyButton = document.getElementById("test-tally-connection");
+    if (
+      testTallyButton &&
+      !testTallyButton.hasAttribute("data-listener-attached")
+    ) {
+      testTallyButton.setAttribute("data-listener-attached", "true");
+      testTallyButton.addEventListener(
+        "click",
+        this.testTallyConnection.bind(this)
+      );
+    }
+
     document
       .getElementById("load-companies")
       .addEventListener("click", this.loadTallyCompanies.bind(this));
@@ -125,15 +156,34 @@ class TallyDatabaseApp {
     });
 
     // Control buttons
-    document
-      .getElementById("start-sync")
-      .addEventListener("click", this.startSync.bind(this));
-    document
-      .getElementById("stop-sync")
-      .addEventListener("click", this.stopSync.bind(this));
-    document
-      .getElementById("save-config")
-      .addEventListener("click", this.saveConfiguration.bind(this));
+    const startSyncButton = document.getElementById("start-sync");
+    if (
+      startSyncButton &&
+      !startSyncButton.hasAttribute("data-listener-attached")
+    ) {
+      startSyncButton.setAttribute("data-listener-attached", "true");
+      startSyncButton.addEventListener("click", this.startSync.bind(this));
+    }
+
+    const stopSyncButton = document.getElementById("stop-sync");
+    if (
+      stopSyncButton &&
+      !stopSyncButton.hasAttribute("data-listener-attached")
+    ) {
+      stopSyncButton.setAttribute("data-listener-attached", "true");
+      stopSyncButton.addEventListener("click", this.stopSync.bind(this));
+    }
+
+    // Save config buttons - handle both visible and hidden
+    const saveConfigButtons = document.querySelectorAll(
+      "#save-config, #save-config-hidden"
+    );
+    saveConfigButtons.forEach((button) => {
+      if (!button.hasAttribute("data-listener-attached")) {
+        button.setAttribute("data-listener-attached", "true");
+        button.addEventListener("click", this.saveConfiguration.bind(this));
+      }
+    });
 
     // SSH tunnel toggle
     document
@@ -168,17 +218,35 @@ class TallyDatabaseApp {
       .addEventListener("click", this.importConfiguration.bind(this));
 
     // Log actions
-    document
-      .getElementById("clear-logs")
-      .addEventListener("click", this.clearLogs.bind(this));
+    const clearLogsButton = document.getElementById("clear-logs");
+    if (
+      clearLogsButton &&
+      !clearLogsButton.hasAttribute("data-listener-attached")
+    ) {
+      clearLogsButton.setAttribute("data-listener-attached", "true");
+      clearLogsButton.addEventListener("click", this.clearLogs.bind(this));
+    }
 
-    // Other actions
-    document
-      .getElementById("view-database-structure")
-      .addEventListener("click", this.viewDatabaseStructure.bind(this));
-    document
-      .getElementById("refresh-status")
-      .addEventListener("click", this.refreshSyncStatus.bind(this));
+    // Other actions - handle both visible and hidden buttons
+    const viewDbStructureButtons = document.querySelectorAll(
+      "#view-database-structure, #view-database-structure-hidden"
+    );
+    viewDbStructureButtons.forEach((button) => {
+      if (!button.hasAttribute("data-listener-attached")) {
+        button.setAttribute("data-listener-attached", "true");
+        button.addEventListener("click", this.viewDatabaseStructure.bind(this));
+      }
+    });
+
+    const refreshStatusButtons = document.querySelectorAll(
+      "#refresh-status, #refresh-status-hidden"
+    );
+    refreshStatusButtons.forEach((button) => {
+      if (!button.hasAttribute("data-listener-attached")) {
+        button.setAttribute("data-listener-attached", "true");
+        button.addEventListener("click", this.refreshSyncStatus.bind(this));
+      }
+    });
   }
 
   setupIPCListeners() {
@@ -387,6 +455,8 @@ class TallyDatabaseApp {
 
   async testDatabaseConnection() {
     const button = document.getElementById("test-db-connection");
+    if (!button || button.disabled) return;
+
     const originalText = button.innerHTML;
 
     try {
@@ -395,18 +465,62 @@ class TallyDatabaseApp {
       button.disabled = true;
 
       const config = this.getConfigFromForm();
+
+      if (
+        !config.database.server ||
+        !config.database.schema ||
+        !config.database.username
+      ) {
+        this.showToast(
+          "Validation Error",
+          "Please fill in all required database fields (Server, Database Name, Username)",
+          "error"
+        );
+        return;
+      }
+
       const result = await window.tallyAPI.testDatabaseConnection(config);
+      const statusIndicator = document.getElementById("connectionStatus");
 
       if (result.success) {
-        this.showToast("Success", result.message, "success");
-        this.updateConnectionStatus("database", "online");
+        this.showToast(
+          "Database Connection",
+          "Connection successful! Database is accessible.",
+          "success"
+        );
+        if (statusIndicator) {
+          const statusDot = statusIndicator.querySelector(".status-dot");
+          const statusText = statusIndicator.querySelector(".status-text");
+          if (statusDot) statusDot.className = "status-dot status-success";
+          if (statusText) statusText.textContent = "Database Connected";
+        }
       } else {
-        this.showToast("Error", result.message, "error");
-        this.updateConnectionStatus("database", "offline");
+        this.showToast(
+          "Database Connection",
+          `Connection failed: ${result.message}`,
+          "error"
+        );
+        if (statusIndicator) {
+          const statusDot = statusIndicator.querySelector(".status-dot");
+          const statusText = statusIndicator.querySelector(".status-text");
+          if (statusDot) statusDot.className = "status-dot status-error";
+          if (statusText) statusText.textContent = "Database Error";
+        }
       }
     } catch (error) {
-      this.showToast("Error", "Connection test failed", "error");
-      this.updateConnectionStatus("database", "offline");
+      console.error("Database connection test error:", error);
+      this.showToast(
+        "Database Connection",
+        "Connection test failed due to an unexpected error",
+        "error"
+      );
+      const statusIndicator = document.getElementById("connectionStatus");
+      if (statusIndicator) {
+        const statusDot = statusIndicator.querySelector(".status-dot");
+        const statusText = statusIndicator.querySelector(".status-text");
+        if (statusDot) statusDot.className = "status-dot status-error";
+        if (statusText) statusText.textContent = "Connection Error";
+      }
     } finally {
       button.innerHTML = originalText;
       button.disabled = false;
@@ -415,6 +529,8 @@ class TallyDatabaseApp {
 
   async testTallyConnection() {
     const button = document.getElementById("test-tally-connection");
+    if (!button || button.disabled) return;
+
     const originalText = button.innerHTML;
 
     try {
@@ -423,18 +539,58 @@ class TallyDatabaseApp {
       button.disabled = true;
 
       const config = this.getConfigFromForm();
+
+      if (!config.tally.server) {
+        this.showToast(
+          "Validation Error",
+          "Please enter Tally server address",
+          "error"
+        );
+        return;
+      }
+
       const result = await window.tallyAPI.testTallyConnection(config);
+      const statusIndicator = document.getElementById("connectionStatus");
 
       if (result.success) {
-        this.showToast("Success", result.message, "success");
-        this.updateConnectionStatus("tally", "online");
+        this.showToast(
+          "Tally Connection",
+          "Connection successful! Tally server is accessible.",
+          "success"
+        );
+        if (statusIndicator) {
+          const statusDot = statusIndicator.querySelector(".status-dot");
+          const statusText = statusIndicator.querySelector(".status-text");
+          if (statusDot) statusDot.className = "status-dot status-success";
+          if (statusText) statusText.textContent = "Tally Connected";
+        }
       } else {
-        this.showToast("Error", result.message, "error");
-        this.updateConnectionStatus("tally", "offline");
+        this.showToast(
+          "Tally Connection",
+          `Connection failed: ${result.message}`,
+          "error"
+        );
+        if (statusIndicator) {
+          const statusDot = statusIndicator.querySelector(".status-dot");
+          const statusText = statusIndicator.querySelector(".status-text");
+          if (statusDot) statusDot.className = "status-dot status-error";
+          if (statusText) statusText.textContent = "Tally Error";
+        }
       }
     } catch (error) {
-      this.showToast("Error", "Connection test failed", "error");
-      this.updateConnectionStatus("tally", "offline");
+      console.error("Tally connection test error:", error);
+      this.showToast(
+        "Tally Connection",
+        "Connection test failed due to an unexpected error",
+        "error"
+      );
+      const statusIndicator = document.getElementById("connectionStatus");
+      if (statusIndicator) {
+        const statusDot = statusIndicator.querySelector(".status-dot");
+        const statusText = statusIndicator.querySelector(".status-text");
+        if (statusDot) statusDot.className = "status-dot status-error";
+        if (statusText) statusText.textContent = "Connection Error";
+      }
     } finally {
       button.innerHTML = originalText;
       button.disabled = false;
@@ -592,26 +748,6 @@ class TallyDatabaseApp {
     document.getElementById("stop-sync").disabled = !isRunning;
   }
 
-  updateConnectionStatus(type, status) {
-    const statusIndicator = document.getElementById("connection-status");
-    const icon = statusIndicator.querySelector("i");
-
-    if (status === "online") {
-      statusIndicator.className = "badge bg-success";
-      icon.className = "bi bi-circle-fill";
-      statusIndicator.innerHTML = '<i class="bi bi-circle-fill"></i> Connected';
-    } else if (status === "offline") {
-      statusIndicator.className = "badge bg-danger";
-      icon.className = "bi bi-circle-fill";
-      statusIndicator.innerHTML = '<i class="bi bi-circle-fill"></i> Offline';
-    } else if (status === "testing") {
-      statusIndicator.className = "badge bg-warning";
-      icon.className = "bi bi-circle-fill pulse";
-      statusIndicator.innerHTML =
-        '<i class="bi bi-circle-fill pulse"></i> Testing';
-    }
-  }
-
   addLogMessage(message) {
     const logContainer =
       document.getElementById("logsContainer") ||
@@ -756,6 +892,9 @@ class TallyDatabaseApp {
       case "menu-database-structure":
         this.viewDatabaseStructure();
         break;
+      default:
+        console.warn("Unknown menu action:", action);
+        break;
     }
   }
 
@@ -801,6 +940,15 @@ class TallyDatabaseApp {
   }
 
   showToast(title, message, type = "info") {
+    // Prevent duplicate toasts with the same message
+    const existingToasts = document.querySelectorAll(".toast-notification");
+    for (let toast of existingToasts) {
+      const toastMessage = toast.querySelector("span");
+      if (toastMessage && toastMessage.textContent === message) {
+        return; // Don't show duplicate toast
+      }
+    }
+
     // Use the modern toast system defined in the HTML
     if (window.showToast) {
       window.showToast(message, type);
@@ -833,14 +981,21 @@ class TallyDatabaseApp {
     const toastElement = document.getElementById(toastId);
     setTimeout(() => toastElement.classList.add("show"), 100);
 
-    toastElement.querySelector(".toast-close").addEventListener("click", () => {
-      toastElement.classList.remove("show");
-      setTimeout(() => toastElement.remove(), 300);
-    });
+    // Add close functionality
+    const closeButton = toastElement.querySelector(".toast-close");
+    if (closeButton) {
+      closeButton.addEventListener("click", () => {
+        toastElement.classList.remove("show");
+        setTimeout(() => toastElement.remove(), 300);
+      });
+    }
 
+    // Auto-remove after 5 seconds
     setTimeout(() => {
-      toastElement.classList.remove("show");
-      setTimeout(() => toastElement.remove(), 300);
+      if (toastElement && toastElement.parentNode) {
+        toastElement.classList.remove("show");
+        setTimeout(() => toastElement.remove(), 300);
+      }
     }, 5000);
   }
 }
