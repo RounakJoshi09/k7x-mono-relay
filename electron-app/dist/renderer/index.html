@@ -200,6 +200,82 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- SSH Tunnel Configuration Section -->
+                                <div class="form-section" id="ssh-config" style="display: none;">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-shield-lock-fill"></i>SSH Tunnel Configuration
+                                    </h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">SSH Host</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-server input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="ssh.example.com" id="ssh-host">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">SSH Port</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-outlet input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="22" value="22" id="ssh-port">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">SSH Username</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-person input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="sshuser" id="ssh-username">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">SSH Password</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-lock input-icon"></i>
+                                                <input type="password" class="form-control-modern" placeholder="••••••••" id="ssh-password">
+                                                <button type="button" class="password-toggle">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Private Key Path</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-key input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="/path/to/private/key" id="ssh-private-key">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Local Port</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-outlet input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="3307" value="3307" id="ssh-local-port">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Remote Host</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-server input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="localhost" value="localhost" id="ssh-remote-host">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Remote Port</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-outlet input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="3306" value="3306" id="ssh-remote-port">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -262,6 +338,57 @@
                                         </select>
                                     </div>
                                 </div>
+
+                                <!-- Date Range Configuration -->
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-calendar-range"></i>Date Range
+                                    </h3>
+                                    <div class="date-range-options">
+                                        <div class="option-card">
+                                            <div class="option-toggle">
+                                                <input type="radio" name="date-range" id="date-auto" class="toggle-switch" checked>
+                                                <label for="date-auto" class="toggle-label"></label>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Auto (Current Financial Year)</h4>
+                                                <p>Automatically use current financial year dates</p>
+                                            </div>
+                                        </div>
+                                        <div class="option-card">
+                                            <div class="option-toggle">
+                                                <input type="radio" name="date-range" id="date-custom" class="toggle-switch">
+                                                <label for="date-custom" class="toggle-label"></label>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Custom Date Range</h4>
+                                                <p>Specify custom start and end dates</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Custom Date Range Fields -->
+                                    <div class="form-section" id="custom-date-range" style="display: none;">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label class="form-label">From Date</label>
+                                                <div class="input-wrapper">
+                                                    <i class="bi bi-calendar input-icon"></i>
+                                                    <input type="date" class="form-control-modern" id="from-date">
+                                                    <div class="input-validation"></div>
+                                                </div>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">To Date</label>
+                                                <div class="input-wrapper">
+                                                    <i class="bi bi-calendar input-icon"></i>
+                                                    <input type="date" class="form-control-modern" id="to-date">
+                                                    <div class="input-validation"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -297,22 +424,6 @@
                             <option value="insert">Insert</option>
                             <option value="file">File</option>
                         </select>
-                        
-                        <!-- SSH Tunnel Fields -->
-                        <input type="text" id="ssh-host" placeholder="SSH Host">
-                        <input type="number" id="ssh-port" placeholder="22" value="22">
-                        <input type="text" id="ssh-username" placeholder="SSH Username">
-                        <input type="password" id="ssh-password" placeholder="SSH Password">
-                        <input type="text" id="ssh-private-key" placeholder="Private Key Path">
-                        <input type="number" id="ssh-local-port" placeholder="3307" value="3307">
-                        <input type="text" id="ssh-remote-host" placeholder="localhost" value="localhost">
-                        <input type="number" id="ssh-remote-port" placeholder="3306" value="3306">
-                        
-                        <!-- Date range fields -->
-                        <input type="radio" name="date-range" id="date-auto" checked>
-                        <input type="radio" name="date-range" id="date-custom">
-                        <input type="date" id="from-date">
-                        <input type="date" id="to-date">
                         
                         <!-- Other missing fields -->
                         <input type="text" id="definition-file" value="tally-export-config.yaml">

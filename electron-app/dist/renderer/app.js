@@ -140,6 +140,25 @@ class TallyDatabaseApp {
       .getElementById("ssh-enabled")
       .addEventListener("change", this.onSSHToggle.bind(this));
 
+    // SSH password toggle
+    document.addEventListener("click", (e) => {
+      if (e.target.closest(".password-toggle")) {
+        const toggle = e.target.closest(".password-toggle");
+        const passwordInput = toggle.previousElementSibling;
+        const icon = toggle.querySelector("i");
+
+        if (passwordInput.type === "password") {
+          passwordInput.type = "text";
+          icon.classList.remove("bi-eye");
+          icon.classList.add("bi-eye-slash");
+        } else {
+          passwordInput.type = "password";
+          icon.classList.remove("bi-eye-slash");
+          icon.classList.add("bi-eye");
+        }
+      }
+    });
+
     // Advanced options
     document
       .getElementById("export-config")
