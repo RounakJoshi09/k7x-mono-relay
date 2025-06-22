@@ -281,6 +281,9 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("validate-config", (_, config) =>
       this.tallyCore.validateConfiguration(config)
     );
+    ipcMain.handle("restore-config", (_, backupPath) =>
+      this.tallyCore.restoreConfigurationFromBackup(backupPath)
+    );
 
     // Database operations
     ipcMain.handle("test-database-connection", (_, config) =>
@@ -327,6 +330,25 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("save-file", async (_, options) => {
       const result = await dialog.showSaveDialog(this.mainWindow!, options);
       return result.filePath;
+    });
+
+    ipcMain.handle(
+      "write-file",
+      async (_, filePath: string, content: string) => {
+        try {
+          fs.writeFileSync(filePath, content, "utf8");
+        } catch (error) {
+          throw new Error(`Failed to write file: ${error}`);
+        }
+      }
+    );
+
+    ipcMain.handle("read-file", async (_, filePath: string) => {
+      try {
+        return fs.readFileSync(filePath, "utf8");
+      } catch (error) {
+        throw new Error(`Failed to read file: ${error}`);
+      }
     });
 
     // Application operations

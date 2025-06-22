@@ -215,6 +215,250 @@ class _database {
             }
         });
     }
+    async testConnection() {
+        return new Promise(async (resolve) => {
+            try {
+                // Setup SSH tunnel if enabled
+                if (this.config.ssh_tunnel && this.config.ssh_tunnel.enabled) {
+                    try {
+                        logger.logMessage("Setting up SSH tunnel to %s:%d", this.config.ssh_tunnel.host, this.config.ssh_tunnel.port);
+                        sshTunnel = new SSHTunnelManager({
+                            host: this.config.ssh_tunnel.host,
+                            port: this.config.ssh_tunnel.port,
+                            username: this.config.ssh_tunnel.username,
+                            password: this.config.ssh_tunnel.password,
+                            privateKey: this.config.ssh_tunnel.privateKey,
+                            localPort: this.config.ssh_tunnel.localPort,
+                            remoteHost: this.config.ssh_tunnel.remoteHost,
+                            remotePort: this.config.ssh_tunnel.remotePort,
+                        });
+                        await sshTunnel.createTunnel();
+                        // Update connection config to use local tunnel port
+                        this.config.port = sshTunnel.getLocalPort();
+                        logger.logMessage("SSH tunnel established, connecting to localhost:%d", this.config.port);
+                    }
+                    catch (sshErr) {
+                        logger.logError("SSH tunnel setup failed", sshErr);
+                        resolve({
+                            success: false,
+                            message: `SSH tunnel setup failed: ${sshErr.message || sshErr}`,
+                        });
+                        return;
+                    }
+                }
+                // Test connection based on technology
+                if (this.config.technology == "postgres") {
+                    const testPool = new postgres.Pool({
+                        host: this.config.server,
+                        port: this.config.port,
+                        database: this.config.schema,
+                        user: this.config.username,
+                        password: this.config.password,
+                        ssl: !this.config.ssl
+                            ? false
+                            : {
+                                rejectUnauthorized: false,
+                            },
+                    });
+                    try {
+                        let connection = await testPool.connect();
+                        await connection.query("SELECT 1"); // Simple test query
+                        connection.release();
+                        await testPool.end();
+                        resolve({
+                            success: true,
+                            message: "PostgreSQL connection successful",
+                        });
+                    }
+                    catch (err) {
+                        await testPool.end();
+                        let errorMessage = "";
+                        let errSystemMessage = typeof err["message"] == "string" ? err["message"] : "";
+                        if (errSystemMessage.startsWith("getaddrinfo ENOTFOUND"))
+                            errorMessage =
+                                "Unable to make PostgreSQL connection to servername or IP address";
+                        else if (errSystemMessage.startsWith("connect ECONNREFUSED"))
+                            errorMessage =
+                                "Unable to make PostgreSQL connection on specified port";
+                        else if (errSystemMessage.startsWith("database") &&
+                            errSystemMessage.endsWith("does not exist"))
+                            errorMessage = "Invalid PostgreSQL database";
+                        else if (errSystemMessage.startsWith("password authentication failed for user") ||
+                            errSystemMessage.includes("There is no user"))
+                            errorMessage = "Invalid PostgreSQL username or password";
+                        else if (errSystemMessage ==
+                            "The server does not support SSL connections")
+                            errorMessage =
+                                "Specified PostgreSQL Database Server does not support secure connection";
+                        else if (errSystemMessage.includes("connection is insecure (try using"))
+                            errorMessage =
+                                'Database Server does not accept insecure connection. Please set "ssl" as true in config.json';
+                        else
+                            errorMessage =
+                                errSystemMessage || "PostgreSQL connection failed";
+                        resolve({
+                            success: false,
+                            message: errorMessage,
+                        });
+                    }
+                }
+                else if (this.config.technology == "mysql") {
+                    let poolConfig = {
+                        host: this.config.server,
+                        port: this.config.port,
+                        database: this.config.schema,
+                        user: this.config.username,
+                        password: this.config.password,
+                        ssl: !this.config.ssl
+                            ? undefined
+                            : {
+                                rejectUnauthorized: false,
+                            },
+                    };
+                    const testPool = mysql.createPool(poolConfig);
+                    try {
+                        let connection = await testPool.promise().getConnection();
+                        await connection.query("SELECT 1"); // Simple test query
+                        connection.release();
+                        await testPool.promise().end();
+                        resolve({
+                            success: true,
+                            message: "MySQL connection successful",
+                        });
+                    }
+                    catch (connErr) {
+                        await testPool.promise().end();
+                        let errorMessage = "";
+                        if (connErr.code == "ECONNREFUSED")
+                            errorMessage =
+                                "Unable to make MySQL connection on specified port";
+                        else if (connErr.code == "ENOTFOUND")
+                            errorMessage =
+                                "Unable to make MySQL connection to servername or IP address";
+                        else if (connErr.code == "ER_BAD_DB_ERROR")
+                            errorMessage = "Invalid MySQL database name";
+                        else if (connErr.code == "ER_ACCESS_DENIED_ERROR")
+                            errorMessage = "Invalid MySQL password";
+                        else if (connErr.code == "ER_NOT_SUPPORTED_AUTH_MODE")
+                            errorMessage = "Invalid MySQL username/password/Authentication";
+                        else
+                            errorMessage = connErr.message || "MySQL connection failed";
+                        resolve({
+                            success: false,
+                            message: errorMessage,
+                        });
+                    }
+                }
+                else if (this.config.technology == "mssql") {
+                    // For MSSQL, we'll test the connection using tedious
+                    const config = {
+                        server: this.config.server,
+                        authentication: {
+                            type: "default",
+                            options: {
+                                userName: this.config.username,
+                                password: this.config.password,
+                            },
+                        },
+                        options: {
+                            database: this.config.schema,
+                            port: this.config.port,
+                            trustServerCertificate: !this.config.ssl,
+                            encrypt: this.config.ssl,
+                        },
+                    };
+                    const connection = new mssql.Connection(config);
+                    try {
+                        await new Promise((resolveConn, rejectConn) => {
+                            connection.connect((err) => {
+                                if (err) {
+                                    rejectConn(err);
+                                }
+                                else {
+                                    resolveConn();
+                                }
+                            });
+                        });
+                        // Test with a simple query
+                        await new Promise((resolveQuery, rejectQuery) => {
+                            const request = new mssql.Request(connection);
+                            request.query("SELECT 1", (err) => {
+                                if (err) {
+                                    rejectQuery(err);
+                                }
+                                else {
+                                    resolveQuery();
+                                }
+                            });
+                        });
+                        connection.close();
+                        resolve({
+                            success: true,
+                            message: "SQL Server connection successful",
+                        });
+                    }
+                    catch (err) {
+                        connection.close();
+                        let errorMessage = "";
+                        if (err.code == "ECONNREFUSED")
+                            errorMessage =
+                                "Unable to make SQL Server connection on specified port";
+                        else if (err.code == "ENOTFOUND")
+                            errorMessage =
+                                "Unable to make SQL Server connection to servername or IP address";
+                        else if (err.code == "ELOGIN")
+                            errorMessage = "Invalid SQL Server username or password";
+                        else if (err.code == "ENAME")
+                            errorMessage = "Invalid SQL Server database name";
+                        else
+                            errorMessage = err.message || "SQL Server connection failed";
+                        resolve({
+                            success: false,
+                            message: errorMessage,
+                        });
+                    }
+                }
+                else if (this.config.technology == "bigquery") {
+                    try {
+                        // Test BigQuery connection by listing datasets
+                        const [datasets] = await this.bigquery.getDatasets();
+                        resolve({
+                            success: true,
+                            message: "BigQuery connection successful",
+                        });
+                    }
+                    catch (err) {
+                        resolve({
+                            success: false,
+                            message: `BigQuery connection failed: ${err.message || err}`,
+                        });
+                    }
+                }
+                else {
+                    resolve({
+                        success: false,
+                        message: `Unsupported database technology: ${this.config.technology}`,
+                    });
+                }
+                // Close SSH tunnel if it exists
+                if (sshTunnel) {
+                    await sshTunnel.closeTunnel();
+                    sshTunnel = null;
+                }
+            }
+            catch (err) {
+                // Close SSH tunnel if it exists
+                if (sshTunnel) {
+                    await sshTunnel.closeTunnel();
+                    sshTunnel = null;
+                }
+                resolve({
+                    success: false,
+                    message: `Connection test failed: ${err.message || err}`,
+                });
+            }
+        });
+    }
     convertCSV(content, lstFieldType, doubleQuote = false) {
         let lstLines = content.split(/\r\n/g);
         for (let r = 0; r < lstLines.length; r++) {

@@ -115,8 +115,50 @@ export class TallyDatabaseCore extends EventEmitter {
 
   public loadConfiguration(): AppConfig {
     try {
+      if (!fs.existsSync(this.configPath)) {
+        this.emit(
+          "log-message",
+          "Configuration file not found, creating default configuration"
+        );
+        this.ensureConfigExists();
+      }
+
       const configData = fs.readFileSync(this.configPath, "utf8");
-      return JSON.parse(configData);
+      let config: AppConfig;
+
+      try {
+        config = JSON.parse(configData);
+      } catch (parseError) {
+        // Configuration file is corrupted, create backup and generate new one
+        this.emit(
+          "log-message",
+          "Configuration file is corrupted, creating backup and generating new configuration"
+        );
+
+        const backupPath = this.configPath + `.backup.${Date.now()}`;
+        fs.copyFileSync(this.configPath, backupPath);
+        this.emit(
+          "log-message",
+          `Corrupted configuration backed up to: ${backupPath}`
+        );
+
+        // Generate new default configuration
+        this.ensureConfigExists();
+        config = JSON.parse(fs.readFileSync(this.configPath, "utf8"));
+      }
+
+      // Validate the loaded configuration structure
+      if (!config.database || !config.tally) {
+        this.emit(
+          "log-message",
+          "Invalid configuration structure, generating new default configuration"
+        );
+        this.ensureConfigExists();
+        config = JSON.parse(fs.readFileSync(this.configPath, "utf8"));
+      }
+
+      this.emit("log-message", "Configuration loaded successfully");
+      return config;
     } catch (error) {
       this.emit("log-message", `Error loading configuration: ${error}`);
       throw new Error(`Failed to load configuration: ${error}`);
@@ -125,11 +167,62 @@ export class TallyDatabaseCore extends EventEmitter {
 
   public saveConfiguration(config: AppConfig): void {
     try {
+      // Validate configuration before saving
+      if (!config.database || !config.tally) {
+        throw new Error("Invalid configuration structure");
+      }
+
+      // Ensure the directory exists
+      const configDir = path.dirname(this.configPath);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+
+      // Create backup before saving
+      if (fs.existsSync(this.configPath)) {
+        const backupPath = this.configPath + `.backup.${Date.now()}`;
+        fs.copyFileSync(this.configPath, backupPath);
+        this.emit("log-message", `Configuration backed up to: ${backupPath}`);
+      }
+
+      // Save the configuration
       fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
       this.emit("log-message", "Configuration saved successfully");
     } catch (error) {
       this.emit("log-message", `Error saving configuration: ${error}`);
       throw new Error(`Failed to save configuration: ${error}`);
+    }
+  }
+
+  public restoreConfigurationFromBackup(backupPath: string): boolean {
+    try {
+      if (!fs.existsSync(backupPath)) {
+        this.emit("log-message", `Backup file not found: ${backupPath}`);
+        return false;
+      }
+
+      // Validate the backup file
+      const backupData = fs.readFileSync(backupPath, "utf8");
+      const backupConfig = JSON.parse(backupData);
+
+      if (!backupConfig.database || !backupConfig.tally) {
+        this.emit("log-message", "Invalid backup configuration structure");
+        return false;
+      }
+
+      // Restore the configuration
+      fs.copyFileSync(backupPath, this.configPath);
+      this.emit(
+        "log-message",
+        `Configuration restored from backup: ${backupPath}`
+      );
+      return true;
+    } catch (error) {
+      this.emit(
+        "log-message",
+        `Error restoring configuration from backup: ${error}`
+      );
+      return false;
     }
   }
 
@@ -204,36 +297,26 @@ export class TallyDatabaseCore extends EventEmitter {
         );
         fs.writeFileSync(tempConfigPath, JSON.stringify(config, null, 2));
 
-        const corePath = this.getCorePath();
-        const testProcess = childProcess.fork(
-          path.join(corePath, "database.mjs"),
-          ["--test-connection", "--config", tempConfigPath]
-        );
+        // Import the database module and test connection directly
+        const { database } = require(path.join(
+          this.getCorePath(),
+          "database.mjs"
+        ));
+        const dbInstance = new database(tempConfigPath);
 
-        let output = "";
-        testProcess.on("message", (msg: any) => {
-          output += msg.toString();
-        });
-
-        testProcess.on("exit", (code) => {
-          fs.unlinkSync(tempConfigPath);
-
-          if (code === 0) {
-            resolve({
-              success: true,
-              message: "Database connection successful",
-            });
-          } else {
+        dbInstance
+          .testConnection()
+          .then((result: { success: boolean; message: string }) => {
+            fs.unlinkSync(tempConfigPath);
+            resolve(result);
+          })
+          .catch((error: any) => {
+            fs.unlinkSync(tempConfigPath);
             resolve({
               success: false,
-              message: output || "Database connection failed",
+              message: `Connection test failed: ${error.message || error}`,
             });
-          }
-        });
-
-        testProcess.on("error", (error) => {
-          resolve({ success: false, message: error.message });
-        });
+          });
       } catch (error) {
         resolve({
           success: false,
@@ -248,37 +331,30 @@ export class TallyDatabaseCore extends EventEmitter {
   ): Promise<{ success: boolean; message: string }> {
     return new Promise((resolve) => {
       try {
-        const corePath = this.getCorePath();
-        const testProcess = childProcess.fork(
-          path.join(corePath, "tally.mjs"),
-          [
-            "--test-connection",
-            "--tally-server",
-            config.tally.server,
-            "--tally-port",
-            config.tally.port.toString(),
-          ]
+        // Create a temporary config file for testing
+        const tempConfigPath = path.join(
+          app.getPath("temp"),
+          "test-tally-config.json"
         );
+        fs.writeFileSync(tempConfigPath, JSON.stringify(config, null, 2));
 
-        let output = "";
-        testProcess.on("message", (msg: any) => {
-          output += msg.toString();
-        });
+        // Import the tally module and test connection directly
+        const { tally } = require(path.join(this.getCorePath(), "tally.mjs"));
+        const tallyInstance = new tally(tempConfigPath);
 
-        testProcess.on("exit", (code) => {
-          if (code === 0) {
-            resolve({ success: true, message: "Tally connection successful" });
-          } else {
+        tallyInstance
+          .testConnection()
+          .then((result: { success: boolean; message: string }) => {
+            fs.unlinkSync(tempConfigPath);
+            resolve(result);
+          })
+          .catch((error: any) => {
+            fs.unlinkSync(tempConfigPath);
             resolve({
               success: false,
-              message: output || "Tally connection failed",
+              message: `Connection test failed: ${error.message || error}`,
             });
-          }
-        });
-
-        testProcess.on("error", (error) => {
-          resolve({ success: false, message: error.message });
-        });
+          });
       } catch (error) {
         resolve({
           success: false,

@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const electron_updater_1 = require("electron-updater");
 const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 const electron_store_1 = __importDefault(require("electron-store"));
 const core_bridge_1 = require("./core-bridge");
 // For Windows startup functionality
@@ -271,6 +272,7 @@ class TallyDatabaseLoaderApp {
         electron_1.ipcMain.handle("load-config", () => this.tallyCore.loadConfiguration());
         electron_1.ipcMain.handle("save-config", (_, config) => this.tallyCore.saveConfiguration(config));
         electron_1.ipcMain.handle("validate-config", (_, config) => this.tallyCore.validateConfiguration(config));
+        electron_1.ipcMain.handle("restore-config", (_, backupPath) => this.tallyCore.restoreConfigurationFromBackup(backupPath));
         // Database operations
         electron_1.ipcMain.handle("test-database-connection", (_, config) => this.tallyCore.testDatabaseConnection(config));
         electron_1.ipcMain.handle("get-database-structure", () => this.tallyCore.getDatabaseStructure());
@@ -303,6 +305,22 @@ class TallyDatabaseLoaderApp {
         electron_1.ipcMain.handle("save-file", async (_, options) => {
             const result = await electron_1.dialog.showSaveDialog(this.mainWindow, options);
             return result.filePath;
+        });
+        electron_1.ipcMain.handle("write-file", async (_, filePath, content) => {
+            try {
+                fs.writeFileSync(filePath, content, "utf8");
+            }
+            catch (error) {
+                throw new Error(`Failed to write file: ${error}`);
+            }
+        });
+        electron_1.ipcMain.handle("read-file", async (_, filePath) => {
+            try {
+                return fs.readFileSync(filePath, "utf8");
+            }
+            catch (error) {
+                throw new Error(`Failed to read file: ${error}`);
+            }
         });
         // Application operations
         electron_1.ipcMain.handle("get-app-version", () => electron_1.app.getVersion());

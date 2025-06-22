@@ -8,6 +8,7 @@ interface TallyDatabaseAPI {
   validateConfig: (
     config: any
   ) => Promise<{ isValid: boolean; errors: string[] }>;
+  restoreConfig: (backupPath: string) => Promise<boolean>;
 
   // Database operations
   testDatabaseConnection: (
@@ -30,6 +31,8 @@ interface TallyDatabaseAPI {
   // File operations
   selectFile: (options: any) => Promise<string>;
   saveFile: (options: any) => Promise<string>;
+  writeFile: (filePath: string, content: string) => Promise<void>;
+  readFile: (filePath: string) => Promise<string>;
 
   // Application operations
   getAppVersion: () => Promise<string>;
@@ -67,6 +70,8 @@ const api: TallyDatabaseAPI = {
   loadConfig: () => ipcRenderer.invoke("load-config"),
   saveConfig: (config) => ipcRenderer.invoke("save-config", config),
   validateConfig: (config) => ipcRenderer.invoke("validate-config", config),
+  restoreConfig: (backupPath) =>
+    ipcRenderer.invoke("restore-config", backupPath),
 
   // Database operations
   testDatabaseConnection: (config) =>
@@ -88,6 +93,9 @@ const api: TallyDatabaseAPI = {
   // File operations
   selectFile: (options) => ipcRenderer.invoke("select-file", options),
   saveFile: (options) => ipcRenderer.invoke("save-file", options),
+  writeFile: (filePath, content) =>
+    ipcRenderer.invoke("write-file", filePath, content),
+  readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
 
   // Application operations
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),

@@ -92,8 +92,33 @@ class TallyDatabaseCore extends events_1.EventEmitter {
     }
     loadConfiguration() {
         try {
+            if (!fs.existsSync(this.configPath)) {
+                this.emit("log-message", "Configuration file not found, creating default configuration");
+                this.ensureConfigExists();
+            }
             const configData = fs.readFileSync(this.configPath, "utf8");
-            return JSON.parse(configData);
+            let config;
+            try {
+                config = JSON.parse(configData);
+            }
+            catch (parseError) {
+                // Configuration file is corrupted, create backup and generate new one
+                this.emit("log-message", "Configuration file is corrupted, creating backup and generating new configuration");
+                const backupPath = this.configPath + `.backup.${Date.now()}`;
+                fs.copyFileSync(this.configPath, backupPath);
+                this.emit("log-message", `Corrupted configuration backed up to: ${backupPath}`);
+                // Generate new default configuration
+                this.ensureConfigExists();
+                config = JSON.parse(fs.readFileSync(this.configPath, "utf8"));
+            }
+            // Validate the loaded configuration structure
+            if (!config.database || !config.tally) {
+                this.emit("log-message", "Invalid configuration structure, generating new default configuration");
+                this.ensureConfigExists();
+                config = JSON.parse(fs.readFileSync(this.configPath, "utf8"));
+            }
+            this.emit("log-message", "Configuration loaded successfully");
+            return config;
         }
         catch (error) {
             this.emit("log-message", `Error loading configuration: ${error}`);
@@ -102,12 +127,51 @@ class TallyDatabaseCore extends events_1.EventEmitter {
     }
     saveConfiguration(config) {
         try {
+            // Validate configuration before saving
+            if (!config.database || !config.tally) {
+                throw new Error("Invalid configuration structure");
+            }
+            // Ensure the directory exists
+            const configDir = path.dirname(this.configPath);
+            if (!fs.existsSync(configDir)) {
+                fs.mkdirSync(configDir, { recursive: true });
+            }
+            // Create backup before saving
+            if (fs.existsSync(this.configPath)) {
+                const backupPath = this.configPath + `.backup.${Date.now()}`;
+                fs.copyFileSync(this.configPath, backupPath);
+                this.emit("log-message", `Configuration backed up to: ${backupPath}`);
+            }
+            // Save the configuration
             fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
             this.emit("log-message", "Configuration saved successfully");
         }
         catch (error) {
             this.emit("log-message", `Error saving configuration: ${error}`);
             throw new Error(`Failed to save configuration: ${error}`);
+        }
+    }
+    restoreConfigurationFromBackup(backupPath) {
+        try {
+            if (!fs.existsSync(backupPath)) {
+                this.emit("log-message", `Backup file not found: ${backupPath}`);
+                return false;
+            }
+            // Validate the backup file
+            const backupData = fs.readFileSync(backupPath, "utf8");
+            const backupConfig = JSON.parse(backupData);
+            if (!backupConfig.database || !backupConfig.tally) {
+                this.emit("log-message", "Invalid backup configuration structure");
+                return false;
+            }
+            // Restore the configuration
+            fs.copyFileSync(backupPath, this.configPath);
+            this.emit("log-message", `Configuration restored from backup: ${backupPath}`);
+            return true;
+        }
+        catch (error) {
+            this.emit("log-message", `Error restoring configuration from backup: ${error}`);
+            return false;
         }
     }
     validateConfiguration(config) {

@@ -35,6 +35,9 @@ class TallyDatabaseApp {
       this.setupIPCListeners();
       this.updateUI();
 
+      // Update the configuration status after initialization
+      this.updateConfigurationStatus();
+
       this.initialized = true;
 
       console.log("Tally Database Loader initialized successfully");
@@ -58,12 +61,172 @@ class TallyDatabaseApp {
 
   async loadConfiguration() {
     try {
+      // Check if there are unsaved changes
+      if (this.isConfigurationModified()) {
+        const result = await window.tallyAPI.showMessageBox({
+          type: "question",
+          title: "Unsaved Changes",
+          message:
+            "You have unsaved changes. Do you want to load the saved configuration and discard your changes?",
+          buttons: ["Yes", "No"],
+          defaultId: 1,
+        });
+
+        if (result.response === 1) {
+          // User chose "No"
+          return;
+        }
+      }
+
       this.config = await window.tallyAPI.loadConfig();
       this.populateFormFromConfig();
       console.log("Configuration loaded successfully");
+      this.showToast("Success", "Configuration loaded successfully", "success");
+
+      // Update the configuration status after loading
+      this.updateConfigurationStatus();
     } catch (error) {
       console.error("Failed to load configuration:", error);
       this.showToast("Error", "Failed to load configuration", "error");
+    }
+  }
+
+  async refreshConfiguration() {
+    try {
+      await this.loadConfiguration();
+    } catch (error) {
+      console.error("Failed to refresh configuration:", error);
+    }
+  }
+
+  async resetConfiguration() {
+    try {
+      // Reset form to default values
+      this.config = null;
+      document.querySelectorAll("form").forEach((form) => form.reset());
+
+      // Set default values
+      document.getElementById("db-technology").value = "mysql";
+      document.getElementById("db-port").value = "3306";
+      document.getElementById("db-ssl").checked = false;
+      document.getElementById("db-load-method").value = "insert";
+
+      document.getElementById("tally-server").value = "localhost";
+      document.getElementById("tally-port").value = "9000";
+      document.getElementById("sync-mode").value = "full";
+      document.getElementById("sync-frequency").value = "0";
+      document.getElementById("definition-file").value =
+        "tally-export-config.yaml";
+
+      document.getElementById("date-auto").checked = true;
+      document.getElementById("ssh-enabled").checked = false;
+
+      // Update UI
+      this.onDatabaseTechnologyChange();
+      this.onSyncModeChange();
+      this.onDateRangeChange();
+      this.onSSHToggle();
+      this.updateVisualSelectors();
+
+      // Update the configuration status after resetting
+      this.updateConfigurationStatus();
+
+      this.showToast("Info", "Configuration reset to default values", "info");
+    } catch (error) {
+      console.error("Failed to reset configuration:", error);
+      this.showToast("Error", "Failed to reset configuration", "error");
+    }
+  }
+
+  isConfigurationModified() {
+    if (!this.config) {
+      return true; // If no config is loaded, consider it modified
+    }
+
+    try {
+      const currentConfig = this.getConfigFromForm();
+      return JSON.stringify(currentConfig) !== JSON.stringify(this.config);
+    } catch (error) {
+      console.error("Error checking configuration modification:", error);
+      return true; // Assume modified if there's an error
+    }
+  }
+
+  onConfigurationChange() {
+    // This method is called whenever the configuration changes
+    // You can add auto-save functionality here if needed
+    console.log("Configuration changed");
+
+    // Update the configuration status in the UI
+    this.updateConfigurationStatus();
+
+    // Optionally, you can enable auto-save by uncommenting the following line:
+    // this.autoSaveConfiguration();
+  }
+
+  async autoSaveConfiguration() {
+    try {
+      if (this.isConfigurationModified()) {
+        await this.saveConfiguration();
+        console.log("Configuration auto-saved");
+      }
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    }
+  }
+
+  updateConfigurationStatus() {
+    // Update UI to show configuration status
+    const isModified = this.isConfigurationModified();
+    const saveButton = document.getElementById("save-config");
+
+    if (saveButton) {
+      if (isModified) {
+        saveButton.classList.add("modified");
+        saveButton.title = "Save Configuration (Modified)";
+      } else {
+        saveButton.classList.remove("modified");
+        saveButton.title = "Save Configuration";
+      }
+    }
+
+    // You can add more UI indicators here
+    console.log("Configuration status updated - Modified:", isModified);
+  }
+
+  showConfigurationSummary() {
+    try {
+      const currentConfig = this.getConfigFromForm();
+      const summary = {
+        database: {
+          technology: currentConfig.database.technology,
+          server: currentConfig.database.server,
+          schema: currentConfig.database.schema,
+          sshEnabled: currentConfig.database.ssh_tunnel?.enabled || false,
+        },
+        tally: {
+          server: currentConfig.tally.server,
+          company: currentConfig.tally.company,
+          syncMode: currentConfig.tally.sync,
+          frequency: currentConfig.tally.frequency,
+        },
+      };
+
+      const message = `Database: ${summary.database.technology} (${
+        summary.database.server
+      }/${summary.database.schema})
+Tally: ${summary.tally.server} - ${
+        summary.tally.company || "No company selected"
+      }
+Sync: ${summary.tally.sync}${
+        summary.tally.frequency > 0 ? ` (${summary.tally.frequency} min)` : ""
+      }
+SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
+
+      this.showToast("Configuration Summary", message, "info");
+    } catch (error) {
+      console.error("Error showing configuration summary:", error);
+      this.showToast("Error", "Failed to show configuration summary", "error");
     }
   }
 
@@ -74,21 +237,90 @@ class TallyDatabaseApp {
       // Validate configuration
       const validation = await window.tallyAPI.validateConfig(this.config);
       if (!validation.isValid) {
-        this.showToast(
-          "Validation Error",
-          validation.errors.join("\n"),
-          "error"
-        );
+        const errorMessage =
+          validation.errors.length > 1
+            ? `Multiple validation errors:\n${validation.errors.join("\n")}`
+            : validation.errors[0];
+
+        this.showToast("Validation Error", errorMessage, "error");
         return false;
       }
 
       await window.tallyAPI.saveConfig(this.config);
       this.showToast("Success", "Configuration saved successfully", "success");
+      console.log("Configuration saved successfully:", this.config);
+
+      // Update the configuration status after saving
+      this.updateConfigurationStatus();
+
       return true;
     } catch (error) {
       console.error("Failed to save configuration:", error);
       this.showToast("Error", "Failed to save configuration", "error");
       return false;
+    }
+  }
+
+  async validateCurrentConfiguration() {
+    try {
+      const currentConfig = this.getConfigFromForm();
+      const validation = await window.tallyAPI.validateConfig(currentConfig);
+
+      if (validation.isValid) {
+        this.showToast("Validation", "Configuration is valid", "success");
+      } else {
+        const errorMessage =
+          validation.errors.length > 1
+            ? `Validation errors:\n${validation.errors.join("\n")}`
+            : validation.errors[0];
+
+        this.showToast("Validation Error", errorMessage, "error");
+      }
+
+      return validation.isValid;
+    } catch (error) {
+      console.error("Failed to validate configuration:", error);
+      this.showToast("Error", "Failed to validate configuration", "error");
+      return false;
+    }
+  }
+
+  async restoreConfigurationFromBackup() {
+    try {
+      const backupPath = await window.tallyAPI.selectFile({
+        title: "Select Backup Configuration File",
+        filters: [
+          { name: "Backup Files", extensions: ["backup.*", "json"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+
+      if (backupPath) {
+        const success = await window.tallyAPI.restoreConfig(backupPath);
+
+        if (success) {
+          // Reload the configuration after restoration
+          await this.loadConfiguration();
+          this.showToast(
+            "Success",
+            "Configuration restored from backup successfully",
+            "success"
+          );
+        } else {
+          this.showToast(
+            "Error",
+            "Failed to restore configuration from backup",
+            "error"
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to restore configuration from backup:", error);
+      this.showToast(
+        "Error",
+        "Failed to restore configuration from backup",
+        "error"
+      );
     }
   }
 
@@ -101,6 +333,7 @@ class TallyDatabaseApp {
         option.classList.add("active");
         document.getElementById("db-technology").value = option.dataset.db;
         this.onDatabaseTechnologyChange();
+        this.onConfigurationChange();
       });
     });
 
@@ -112,13 +345,15 @@ class TallyDatabaseApp {
         option.classList.add("active");
         document.getElementById("sync-mode").value = option.dataset.mode;
         this.onSyncModeChange();
+        this.onConfigurationChange();
       });
     });
 
     // Database form events
-    document
-      .getElementById("db-technology")
-      .addEventListener("change", this.onDatabaseTechnologyChange.bind(this));
+    document.getElementById("db-technology").addEventListener("change", () => {
+      this.onDatabaseTechnologyChange();
+      this.onConfigurationChange();
+    });
 
     // Test Database Connection - ensure only one listener
     const testDbButton = document.getElementById("test-db-connection");
@@ -146,13 +381,17 @@ class TallyDatabaseApp {
     document
       .getElementById("load-companies")
       .addEventListener("click", this.loadTallyCompanies.bind(this));
-    document
-      .getElementById("sync-mode")
-      .addEventListener("change", this.onSyncModeChange.bind(this));
+    document.getElementById("sync-mode").addEventListener("change", () => {
+      this.onSyncModeChange();
+      this.onConfigurationChange();
+    });
 
     // Date range events
     document.querySelectorAll('input[name="date-range"]').forEach((radio) => {
-      radio.addEventListener("change", this.onDateRangeChange.bind(this));
+      radio.addEventListener("change", () => {
+        this.onDateRangeChange();
+        this.onConfigurationChange();
+      });
     });
 
     // Control buttons
@@ -185,10 +424,22 @@ class TallyDatabaseApp {
       }
     });
 
+    // Load config buttons - handle both visible and hidden
+    const loadConfigButtons = document.querySelectorAll(
+      "#load-config, #load-config-hidden"
+    );
+    loadConfigButtons.forEach((button) => {
+      if (!button.hasAttribute("data-listener-attached")) {
+        button.setAttribute("data-listener-attached", "true");
+        button.addEventListener("click", this.loadConfiguration.bind(this));
+      }
+    });
+
     // SSH tunnel toggle
-    document
-      .getElementById("ssh-enabled")
-      .addEventListener("change", this.onSSHToggle.bind(this));
+    document.getElementById("ssh-enabled").addEventListener("change", () => {
+      this.onSSHToggle();
+      this.onConfigurationChange();
+    });
 
     // Startup settings
     document
@@ -256,6 +507,80 @@ class TallyDatabaseApp {
         button.addEventListener("click", this.refreshSyncStatus.bind(this));
       }
     });
+
+    // Add change listeners to all form inputs for configuration change detection
+    const formInputs = document.querySelectorAll(
+      "input[type='text'], input[type='number'], input[type='password'], select, textarea"
+    );
+    formInputs.forEach((input) => {
+      input.addEventListener("change", this.onConfigurationChange.bind(this));
+      input.addEventListener("input", this.onConfigurationChange.bind(this));
+    });
+
+    // Add change listeners to checkboxes and radio buttons
+    const formCheckboxes = document.querySelectorAll(
+      "input[type='checkbox'], input[type='radio']"
+    );
+    formCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener(
+        "change",
+        this.onConfigurationChange.bind(this)
+      );
+    });
+
+    // Add beforeunload event listener to warn about unsaved changes
+    window.addEventListener("beforeunload", (event) => {
+      if (this.isConfigurationModified()) {
+        event.preventDefault();
+        event.returnValue =
+          "You have unsaved changes. Are you sure you want to leave?";
+        return event.returnValue;
+      }
+    });
+
+    // Add window focus event listener to refresh configuration status
+    window.addEventListener("focus", () => {
+      this.updateConfigurationStatus();
+    });
+
+    // Add keyboard shortcuts
+    document.addEventListener("keydown", (event) => {
+      // Ctrl+S for save
+      if (event.ctrlKey && event.key === "s") {
+        event.preventDefault();
+        this.saveConfiguration();
+      }
+
+      // Ctrl+O for load
+      if (event.ctrlKey && event.key === "o") {
+        event.preventDefault();
+        this.loadConfiguration();
+      }
+
+      // Ctrl+N for new configuration
+      if (event.ctrlKey && event.key === "n") {
+        event.preventDefault();
+        this.newConfiguration();
+      }
+
+      // Ctrl+I for configuration summary
+      if (event.ctrlKey && event.key === "i") {
+        event.preventDefault();
+        this.showConfigurationSummary();
+      }
+
+      // Ctrl+V for validate configuration
+      if (event.ctrlKey && event.key === "v") {
+        event.preventDefault();
+        this.validateCurrentConfiguration();
+      }
+
+      // Ctrl+R for restore configuration from backup
+      if (event.ctrlKey && event.key === "r") {
+        event.preventDefault();
+        this.restoreConfigurationFromBackup();
+      }
+    });
   }
 
   setupIPCListeners() {
@@ -286,110 +611,181 @@ class TallyDatabaseApp {
   }
 
   populateFormFromConfig() {
-    if (!this.config) return;
-
-    // Database configuration
-    const db = this.config.database;
-    document.getElementById("db-technology").value = db.technology || "mysql";
-    document.getElementById("db-server").value = db.server || "";
-    document.getElementById("db-port").value = db.port || 3306;
-    document.getElementById("db-schema").value = db.schema || "";
-    document.getElementById("db-username").value = db.username || "";
-    document.getElementById("db-password").value = db.password || "";
-    document.getElementById("db-ssl").checked = db.ssl || false;
-    document.getElementById("db-load-method").value = db.loadmethod || "insert";
-
-    // SSH tunnel configuration
-    if (db.ssh_tunnel) {
-      document.getElementById("ssh-enabled").checked =
-        db.ssh_tunnel.enabled || false;
-      document.getElementById("ssh-host").value = db.ssh_tunnel.host || "";
-      document.getElementById("ssh-port").value = db.ssh_tunnel.port || 22;
-      document.getElementById("ssh-username").value =
-        db.ssh_tunnel.username || "";
-      document.getElementById("ssh-password").value =
-        db.ssh_tunnel.password || "";
-      document.getElementById("ssh-private-key").value =
-        db.ssh_tunnel.privateKey || "";
-      document.getElementById("ssh-local-port").value =
-        db.ssh_tunnel.localPort || 3307;
-      document.getElementById("ssh-remote-host").value =
-        db.ssh_tunnel.remoteHost || "localhost";
-      document.getElementById("ssh-remote-port").value =
-        db.ssh_tunnel.remotePort || 3306;
-      this.onSSHToggle();
+    if (!this.config) {
+      console.warn("No configuration to populate");
+      return;
     }
 
-    // Tally configuration
-    const tally = this.config.tally;
-    document.getElementById("tally-server").value = tally.server || "localhost";
-    document.getElementById("tally-port").value = tally.port || 9000;
-    document.getElementById("tally-company").value = tally.company || "";
-    document.getElementById("sync-mode").value = tally.sync || "full";
-    document.getElementById("sync-frequency").value = tally.frequency || 0;
-    document.getElementById("definition-file").value =
-      tally.definition || "tally-export-config.yaml";
+    try {
+      // Database configuration
+      const db = this.config.database || {};
+      const dbTechnologyElement = document.getElementById("db-technology");
+      const dbServerElement = document.getElementById("db-server");
+      const dbPortElement = document.getElementById("db-port");
+      const dbSchemaElement = document.getElementById("db-schema");
+      const dbUsernameElement = document.getElementById("db-username");
+      const dbPasswordElement = document.getElementById("db-password");
+      const dbSslElement = document.getElementById("db-ssl");
+      const dbLoadMethodElement = document.getElementById("db-load-method");
 
-    // Date range
-    if (tally.fromdate === "auto" || tally.todate === "auto") {
-      document.getElementById("date-auto").checked = true;
-    } else {
-      document.getElementById("date-custom").checked = true;
-      document.getElementById("from-date").value = tally.fromdate;
-      document.getElementById("to-date").value = tally.todate;
+      if (dbTechnologyElement)
+        dbTechnologyElement.value = db.technology || "mysql";
+      if (dbServerElement) dbServerElement.value = db.server || "";
+      if (dbPortElement) dbPortElement.value = db.port || 3306;
+      if (dbSchemaElement) dbSchemaElement.value = db.schema || "";
+      if (dbUsernameElement) dbUsernameElement.value = db.username || "";
+      if (dbPasswordElement) dbPasswordElement.value = db.password || "";
+      if (dbSslElement) dbSslElement.checked = db.ssl || false;
+      if (dbLoadMethodElement)
+        dbLoadMethodElement.value = db.loadmethod || "insert";
+
+      // SSH tunnel configuration
+      if (db.ssh_tunnel) {
+        const sshEnabledElement = document.getElementById("ssh-enabled");
+        const sshHostElement = document.getElementById("ssh-host");
+        const sshPortElement = document.getElementById("ssh-port");
+        const sshUsernameElement = document.getElementById("ssh-username");
+        const sshPasswordElement = document.getElementById("ssh-password");
+        const sshPrivateKeyElement = document.getElementById("ssh-private-key");
+        const sshLocalPortElement = document.getElementById("ssh-local-port");
+        const sshRemoteHostElement = document.getElementById("ssh-remote-host");
+        const sshRemotePortElement = document.getElementById("ssh-remote-port");
+
+        if (sshEnabledElement)
+          sshEnabledElement.checked = db.ssh_tunnel.enabled || false;
+        if (sshHostElement) sshHostElement.value = db.ssh_tunnel.host || "";
+        if (sshPortElement) sshPortElement.value = db.ssh_tunnel.port || 22;
+        if (sshUsernameElement)
+          sshUsernameElement.value = db.ssh_tunnel.username || "";
+        if (sshPasswordElement)
+          sshPasswordElement.value = db.ssh_tunnel.password || "";
+        if (sshPrivateKeyElement)
+          sshPrivateKeyElement.value = db.ssh_tunnel.privateKey || "";
+        if (sshLocalPortElement)
+          sshLocalPortElement.value = db.ssh_tunnel.localPort || 3307;
+        if (sshRemoteHostElement)
+          sshRemoteHostElement.value = db.ssh_tunnel.remoteHost || "localhost";
+        if (sshRemotePortElement)
+          sshRemotePortElement.value = db.ssh_tunnel.remotePort || 3306;
+
+        this.onSSHToggle();
+      }
+
+      // Tally configuration
+      const tally = this.config.tally || {};
+      const tallyServerElement = document.getElementById("tally-server");
+      const tallyPortElement = document.getElementById("tally-port");
+      const tallyCompanyElement = document.getElementById("tally-company");
+      const syncModeElement = document.getElementById("sync-mode");
+      const syncFrequencyElement = document.getElementById("sync-frequency");
+      const definitionFileElement = document.getElementById("definition-file");
+
+      if (tallyServerElement)
+        tallyServerElement.value = tally.server || "localhost";
+      if (tallyPortElement) tallyPortElement.value = tally.port || 9000;
+      if (tallyCompanyElement) tallyCompanyElement.value = tally.company || "";
+      if (syncModeElement) syncModeElement.value = tally.sync || "full";
+      if (syncFrequencyElement)
+        syncFrequencyElement.value = tally.frequency || 0;
+      if (definitionFileElement)
+        definitionFileElement.value =
+          tally.definition || "tally-export-config.yaml";
+
+      // Date range
+      const dateAutoElement = document.getElementById("date-auto");
+      const dateCustomElement = document.getElementById("date-custom");
+      const fromDateElement = document.getElementById("from-date");
+      const toDateElement = document.getElementById("to-date");
+
+      if (tally.fromdate === "auto" || tally.todate === "auto") {
+        if (dateAutoElement) dateAutoElement.checked = true;
+      } else {
+        if (dateCustomElement) dateCustomElement.checked = true;
+        if (fromDateElement) fromDateElement.value = tally.fromdate || "";
+        if (toDateElement) toDateElement.value = tally.todate || "";
+      }
+
+      // Update UI components
+      this.onDatabaseTechnologyChange();
+      this.onSyncModeChange();
+      this.onDateRangeChange();
+      this.updateVisualSelectors();
+
+      console.log("Form populated from configuration successfully");
+
+      // Update the configuration status after populating
+      this.updateConfigurationStatus();
+    } catch (error) {
+      console.error("Error populating form from configuration:", error);
+      this.showToast(
+        "Warning",
+        "Some configuration fields could not be loaded",
+        "warning"
+      );
     }
-
-    this.onDatabaseTechnologyChange();
-    this.onSyncModeChange();
-    this.onDateRangeChange();
-    this.updateVisualSelectors();
   }
 
   getConfigFromForm() {
-    return {
-      database: {
-        technology: document.getElementById("db-technology").value,
-        server: document.getElementById("db-server").value,
-        port: parseInt(document.getElementById("db-port").value) || 3306,
-        ssl: document.getElementById("db-ssl").checked,
-        schema: document.getElementById("db-schema").value,
-        username: document.getElementById("db-username").value,
-        password: document.getElementById("db-password").value,
-        loadmethod: document.getElementById("db-load-method").value,
-        ssh_tunnel: document.getElementById("ssh-enabled").checked
-          ? {
-              enabled: true,
-              host: document.getElementById("ssh-host").value,
-              port: parseInt(document.getElementById("ssh-port").value) || 22,
-              username: document.getElementById("ssh-username").value,
-              password: document.getElementById("ssh-password").value,
-              privateKey: document.getElementById("ssh-private-key").value,
-              localPort:
-                parseInt(document.getElementById("ssh-local-port").value) ||
-                3307,
-              remoteHost: document.getElementById("ssh-remote-host").value,
-              remotePort:
-                parseInt(document.getElementById("ssh-remote-port").value) ||
-                3306,
-            }
-          : { enabled: false },
-      },
-      tally: {
-        definition: document.getElementById("definition-file").value,
-        server: document.getElementById("tally-server").value,
-        port: parseInt(document.getElementById("tally-port").value) || 9000,
-        company: document.getElementById("tally-company").value,
-        fromdate: document.getElementById("date-auto").checked
-          ? "auto"
-          : document.getElementById("from-date").value,
-        todate: document.getElementById("date-auto").checked
-          ? "auto"
-          : document.getElementById("to-date").value,
-        sync: document.getElementById("sync-mode").value,
-        frequency:
-          parseInt(document.getElementById("sync-frequency").value) || 0,
-      },
-    };
+    try {
+      const config = {
+        database: {
+          technology:
+            document.getElementById("db-technology")?.value || "mysql",
+          server: document.getElementById("db-server")?.value || "",
+          port: parseInt(document.getElementById("db-port")?.value) || 3306,
+          ssl: document.getElementById("db-ssl")?.checked || false,
+          schema: document.getElementById("db-schema")?.value || "",
+          username: document.getElementById("db-username")?.value || "",
+          password: document.getElementById("db-password")?.value || "",
+          loadmethod:
+            document.getElementById("db-load-method")?.value || "insert",
+          ssh_tunnel: document.getElementById("ssh-enabled")?.checked
+            ? {
+                enabled: true,
+                host: document.getElementById("ssh-host")?.value || "",
+                port:
+                  parseInt(document.getElementById("ssh-port")?.value) || 22,
+                username: document.getElementById("ssh-username")?.value || "",
+                password: document.getElementById("ssh-password")?.value || "",
+                privateKey:
+                  document.getElementById("ssh-private-key")?.value || "",
+                localPort:
+                  parseInt(document.getElementById("ssh-local-port")?.value) ||
+                  3307,
+                remoteHost:
+                  document.getElementById("ssh-remote-host")?.value ||
+                  "localhost",
+                remotePort:
+                  parseInt(document.getElementById("ssh-remote-port")?.value) ||
+                  3306,
+              }
+            : { enabled: false },
+        },
+        tally: {
+          definition:
+            document.getElementById("definition-file")?.value ||
+            "tally-export-config.yaml",
+          server: document.getElementById("tally-server")?.value || "localhost",
+          port: parseInt(document.getElementById("tally-port")?.value) || 9000,
+          company: document.getElementById("tally-company")?.value || "",
+          fromdate: document.getElementById("date-auto")?.checked
+            ? "auto"
+            : document.getElementById("from-date")?.value || "",
+          todate: document.getElementById("date-auto")?.checked
+            ? "auto"
+            : document.getElementById("to-date")?.value || "",
+          sync: document.getElementById("sync-mode")?.value || "full",
+          frequency:
+            parseInt(document.getElementById("sync-frequency")?.value) || 0,
+        },
+      };
+
+      console.log("Configuration captured from form:", config);
+      return config;
+    } catch (error) {
+      console.error("Error capturing configuration from form:", error);
+      throw new Error("Failed to capture configuration from form");
+    }
   }
 
   onDatabaseTechnologyChange() {
@@ -983,10 +1379,58 @@ class TallyDatabaseApp {
     }
   }
 
+  async saveConfigToFile(filePath, config) {
+    try {
+      const response = await fetch(filePath, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config, null, 2),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save file: ${response.statusText}`);
+      }
+    } catch (error) {
+      // Fallback: try to write using Node.js fs module through IPC
+      try {
+        await window.tallyAPI.writeFile(
+          filePath,
+          JSON.stringify(config, null, 2)
+        );
+      } catch (fsError) {
+        throw new Error(`Failed to save configuration file: ${error.message}`);
+      }
+    }
+  }
+
+  async loadConfigFromFile(filePath) {
+    try {
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.statusText}`);
+      }
+      const configText = await response.text();
+      return JSON.parse(configText);
+    } catch (error) {
+      // Fallback: try to read using Node.js fs module through IPC
+      try {
+        const configText = await window.tallyAPI.readFile(filePath);
+        return JSON.parse(configText);
+      } catch (fsError) {
+        throw new Error(`Failed to load configuration file: ${error.message}`);
+      }
+    }
+  }
+
   handleMenuAction(action) {
     switch (action) {
       case "menu-new-configuration":
         this.newConfiguration();
+        break;
+      case "menu-open-configuration":
+        this.loadConfiguration();
         break;
       case "menu-save-configuration":
         this.saveConfiguration();
@@ -1015,14 +1459,31 @@ class TallyDatabaseApp {
     }
   }
 
-  newConfiguration() {
-    // Reset form to default values
-    this.config = null;
-    document.querySelectorAll("form").forEach((form) => form.reset());
-    this.onDatabaseTechnologyChange();
-    this.onSyncModeChange();
-    this.onDateRangeChange();
-    this.showToast("Info", "New configuration created", "info");
+  async newConfiguration() {
+    try {
+      // Check if there are unsaved changes
+      if (this.isConfigurationModified()) {
+        const result = await window.tallyAPI.showMessageBox({
+          type: "question",
+          title: "Unsaved Changes",
+          message:
+            "You have unsaved changes. Do you want to create a new configuration and discard your changes?",
+          buttons: ["Yes", "No"],
+          defaultId: 1,
+        });
+
+        if (result.response === 1) {
+          // User chose "No"
+          return;
+        }
+      }
+
+      // Reset form to default values using the reset method
+      this.resetConfiguration();
+    } catch (error) {
+      console.error("Failed to create new configuration:", error);
+      this.showToast("Error", "Failed to create new configuration", "error");
+    }
   }
 
   updateVisualSelectors() {

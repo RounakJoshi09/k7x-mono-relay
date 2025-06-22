@@ -7,6 +7,7 @@ const api = {
     loadConfig: () => electron_1.ipcRenderer.invoke("load-config"),
     saveConfig: (config) => electron_1.ipcRenderer.invoke("save-config", config),
     validateConfig: (config) => electron_1.ipcRenderer.invoke("validate-config", config),
+    restoreConfig: (backupPath) => electron_1.ipcRenderer.invoke("restore-config", backupPath),
     // Database operations
     testDatabaseConnection: (config) => electron_1.ipcRenderer.invoke("test-database-connection", config),
     getDatabaseStructure: () => electron_1.ipcRenderer.invoke("get-database-structure"),
@@ -21,6 +22,8 @@ const api = {
     // File operations
     selectFile: (options) => electron_1.ipcRenderer.invoke("select-file", options),
     saveFile: (options) => electron_1.ipcRenderer.invoke("save-file", options),
+    writeFile: (filePath, content) => electron_1.ipcRenderer.invoke("write-file", filePath, content),
+    readFile: (filePath) => electron_1.ipcRenderer.invoke("read-file", filePath),
     // Application operations
     getAppVersion: () => electron_1.ipcRenderer.invoke("get-app-version"),
     getUserDataPath: () => electron_1.ipcRenderer.invoke("get-user-data-path"),
