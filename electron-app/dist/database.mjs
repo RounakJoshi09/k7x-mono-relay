@@ -195,9 +195,7 @@ class _database {
                     await this.connectionPoolPostgres.end();
                 }
                 else if (this.config.technology == "mysql") {
-                    if (connectionPoolMysql) {
-                        await connectionPoolMysql.promise().end();
-                    }
+                    await connectionPoolMysql.promise().end();
                 }
                 else
                     ;
@@ -580,10 +578,6 @@ class _database {
             });
         };
         return new Promise((resolve, reject) => {
-            if (!connectionPoolMysql) {
-                reject(new Error("MySQL connection pool not initialized"));
-                return;
-            }
             connectionPoolMysql.getConnection(async (connErr, connection) => {
                 try {
                     if (connErr) {

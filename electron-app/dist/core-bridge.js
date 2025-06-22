@@ -375,10 +375,12 @@ class TallyDatabaseCore extends events_1.EventEmitter {
     getCorePath() {
         return electron_1.app.isPackaged
             ? path.join(process.resourcesPath, "core")
-            : path.join(__dirname, "../core");
+            : path.join(__dirname, "../core/dist");
     }
     configToArgs(config) {
         const args = [];
+        // Add config path argument
+        args.push("--config-path", this.configPath);
         // Database args
         args.push("--database-technology", config.database.technology);
         args.push("--database-server", config.database.server);

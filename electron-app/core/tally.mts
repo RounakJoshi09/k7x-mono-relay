@@ -5,7 +5,7 @@ import http from "http";
 import yaml from "js-yaml";
 import { utility } from "./utility.mjs";
 import { logger } from "./logger.mjs";
-import { database } from "./database.mjs";
+import { database, getInstance as getDatabaseInstance } from "./database.mjs";
 import { tallyConfig, tableConfigYAML } from "./definition.mjs";
 
 class _tally {
@@ -21,11 +21,10 @@ class _tally {
   private importTransaction = true;
   private truncateTable = true;
 
-  constructor() {
+  constructor(configPath?: string) {
     try {
-      this.config = JSON.parse(fs.readFileSync("./config.json", "utf8"))[
-        "tally"
-      ];
+      const configFile = configPath || "./config.json";
+      this.config = JSON.parse(fs.readFileSync(configFile, "utf8"))["tally"];
     } catch (err) {
       this.config = {
         definition: "tally-export-config.yaml",
@@ -84,6 +83,7 @@ class _tally {
 
   importData(): Promise<void> {
     return new Promise<void>(async (resolve, reject) => {
+      let dbConnectionOpened = false;
       try {
         logger.logMessage("Tally to Database | version: 1.0.36");
 
@@ -103,10 +103,15 @@ class _tally {
           return;
         }
 
-        await database.openConnectionPool();
+        await getDatabaseInstance().openConnectionPool();
+        dbConnectionOpened = true;
 
         if (this.config.sync == "incremental") {
-          if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
+          if (
+            /^(mssql|mysql|postgres)$/g.test(
+              getDatabaseInstance().config.technology
+            )
+          ) {
             //set mandatory config required for incremental sync
             this.config.fromdate = "auto";
             this.config.todate = "auto";
@@ -118,11 +123,11 @@ class _tally {
             //acquire last AlterID of master & transaction from last sync version of Database
             logger.logMessage("Acquiring last AlterID from database");
             let lastAlterIdMasterDatabase =
-              await database.executeScalar<number>(
+              await getDatabaseInstance().executeScalar<number>(
                 `select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Master'`
               );
             let lastAlterIdTransactionDatabase =
-              await database.executeScalar<number>(
+              await getDatabaseInstance().executeScalar<number>(
                 `select coalesce(max(cast(value as int)),0) x from config where name = 'Last AlterID Transaction'`
               );
 
@@ -159,15 +164,6 @@ class _tally {
             let lastAlterIdMasterTally = this.lastAlterIdMaster;
             let lastAlterIdTransactionTally = this.lastAlterIdTransaction;
 
-            //acquire last AlterID of master & transaction from database
-            // let lstPrimaryMasterTableNames = this.lstTableMaster.filter(p => p.nature == 'Primary').map(p => p.name);
-            // let sqlQuery = 'select max(coalesce(t.alterid,0)) from (';
-            // lstPrimaryMasterTableNames.forEach(p => sqlQuery += ` select max(alterid) as alterid from ${p} union`);
-            // sqlQuery = utility.String.strip(sqlQuery, 5);
-            // sqlQuery += ') as t';
-            // let lastAlterIdMasterDatabase = await database.executeScalar<number>(sqlQuery) || 0;
-            // let lastAlterIdTransactionDatabase = await database.executeScalar<number>('select max(coalesce(alterid,0)) from trn_voucher') || 0;
-
             //calculate flags to determine what changed
             let flgIsMasterChanged =
               lastAlterIdMasterTally != lastAlterIdMasterDatabase;
@@ -194,8 +190,12 @@ class _tally {
             }
             for (let i = 0; i < lstPrimaryTables.length; i++) {
               let activeTable = lstPrimaryTables[i];
-              await database.executeNonQuery("truncate table _diff;");
-              await database.executeNonQuery("truncate table _delete;");
+              await getDatabaseInstance().executeNonQuery(
+                "truncate table _diff;"
+              );
+              await getDatabaseInstance().executeNonQuery(
+                "truncate table _delete;"
+              );
               let tempTable: tableConfigYAML = {
                 name: "",
                 collection: activeTable.collection,
@@ -216,7 +216,7 @@ class _tally {
                 filters: activeTable.filters,
               };
               await this.processReport("_diff", tempTable, configTallyXML);
-              await database.bulkLoad(
+              await getDatabaseInstance().bulkLoad(
                 path.join(process.cwd(), `./csv/_diff.data`),
                 "_diff",
                 tempTable.fields.map((p) => p.type)
@@ -224,16 +224,16 @@ class _tally {
               fs.unlinkSync(path.join(process.cwd(), `./csv/_diff.data`)); //delete temporary file
 
               //insert into delete list rows there were deleted in current data compared to previous one
-              await database.executeNonQuery(
+              await getDatabaseInstance().executeNonQuery(
                 `insert into _delete select guid from ${activeTable.name} where guid not in (select guid from _diff);`
               );
               //insert into delete list rows that were modified in current data (as they will be imported freshly)
-              await database.executeNonQuery(
+              await getDatabaseInstance().executeNonQuery(
                 `insert into _delete select t.guid from ${activeTable.name} as t join _diff as s on s.guid = t.guid where s.alterid <> t.alterid;`
               );
 
               //remove delete list rows from the source table
-              await database.executeNonQuery(
+              await getDatabaseInstance().executeNonQuery(
                 `delete from ${activeTable.name} where guid in (select guid from _delete)`
               );
 
@@ -245,7 +245,7 @@ class _tally {
                 for (let j = 0; j < activeTable.cascade_delete.length; j++) {
                   let targetTable = activeTable.cascade_delete[j].table;
                   let targetField = activeTable.cascade_delete[j].field;
-                  await database.executeNonQuery(
+                  await getDatabaseInstance().executeNonQuery(
                     `delete from ${targetTable} where ${targetField} in (select guid from _delete);`
                   );
                 }
@@ -270,7 +270,7 @@ class _tally {
                   activeTable,
                   configTallyXML
                 );
-                await database.bulkLoad(
+                await getDatabaseInstance().bulkLoad(
                   path.join(process.cwd(), `./csv/${targetTable}.data`),
                   targetTable,
                   activeTable.fields.map((p) => p.type)
@@ -300,7 +300,7 @@ class _tally {
                   activeTable,
                   configTallyXML
                 );
-                await database.bulkLoad(
+                await getDatabaseInstance().bulkLoad(
                   path.join(process.cwd(), `./csv/${targetTable}.data`),
                   targetTable,
                   activeTable.fields.map((p) => p.type)
@@ -324,16 +324,20 @@ class _tally {
                   for (let j = 0; j < activeTable.cascade_update.length; j++) {
                     let targetTable = activeTable.cascade_update[j].table;
                     let targetField = activeTable.cascade_update[j].field;
-                    if (database.config.technology == "mssql") {
-                      await database.executeNonQuery(
+                    if (getDatabaseInstance().config.technology == "mssql") {
+                      await getDatabaseInstance().executeNonQuery(
                         `update t set t.${targetField} = s.name from ${targetTable} as t join ${activeTable.name} as s on s.guid = t._${targetField} ;`
                       );
-                    } else if (database.config.technology == "mysql") {
-                      await database.executeNonQuery(
+                    } else if (
+                      getDatabaseInstance().config.technology == "mysql"
+                    ) {
+                      await getDatabaseInstance().executeNonQuery(
                         `update ${targetTable} as t join ${activeTable.name} as s on s.guid = t._${targetField} set t.${targetField} = s.name ;`
                       );
-                    } else if (database.config.technology == "postgres") {
-                      await database.executeNonQuery(
+                    } else if (
+                      getDatabaseInstance().config.technology == "postgres"
+                    ) {
+                      await getDatabaseInstance().executeNonQuery(
                         `update ${targetTable} as t set ${targetField} = s.name from ${activeTable.name} as s where s.guid = t._${targetField} ;`
                       );
                     } else;
@@ -344,12 +348,15 @@ class _tally {
             if (flgIsTransactionChanged) {
               //check if any Voucher Type is set to auto numbering
               //automatic voucher number shifts voucher numbers of all subsequent date vouchers on insertion of in-between vouchers which requires updation
-              let countAutoNumberVouchers = await database.executeNonQuery(
-                `select count(*) as c from mst_vouchertype where numbering_method like '%Auto%' ;`
-              );
+              let countAutoNumberVouchers =
+                await getDatabaseInstance().executeNonQuery(
+                  `select count(*) as c from mst_vouchertype where numbering_method like '%Auto%' ;`
+                );
               if (countAutoNumberVouchers) {
                 logger.logMessage("  processing voucher number updates");
-                await database.executeNonQuery("truncate table _vchnumber;");
+                await getDatabaseInstance().executeNonQuery(
+                  "truncate table _vchnumber;"
+                );
 
                 //pull list of voucher numbers for all the vouchers
                 let activeTable = this.lstTableTransaction.filter(
@@ -385,7 +392,7 @@ class _tally {
                   tempTable,
                   configTallyXML
                 );
-                await database.bulkLoad(
+                await getDatabaseInstance().bulkLoad(
                   path.join(process.cwd(), `./csv/_vchnumber.data`),
                   "_vchnumber",
                   tempTable.fields.map((p) => p.type)
@@ -395,16 +402,18 @@ class _tally {
                 ); //delete temporary file
 
                 //update voucher number with fresh copy
-                if (database.config.technology == "mssql") {
-                  await database.executeNonQuery(
+                if (getDatabaseInstance().config.technology == "mssql") {
+                  await getDatabaseInstance().executeNonQuery(
                     "update t set t.voucher_number = s.voucher_number from trn_voucher as t join _vchnumber as s on s.guid = t.guid;"
                   );
-                } else if (database.config.technology == "mysql") {
-                  await database.executeNonQuery(
+                } else if (getDatabaseInstance().config.technology == "mysql") {
+                  await getDatabaseInstance().executeNonQuery(
                     "update trn_voucher as t join _vchnumber as s on s.guid = t.guid set t.voucher_number = s.voucher_number;"
                   );
-                } else if (database.config.technology == "postgres") {
-                  await database.executeNonQuery(
+                } else if (
+                  getDatabaseInstance().config.technology == "postgres"
+                ) {
+                  await getDatabaseInstance().executeNonQuery(
                     "update trn_voucher as t set voucher_number = s.voucher_number from _vchnumber as s where s.guid = t.guid;"
                   );
                 } else;
@@ -412,9 +421,15 @@ class _tally {
             }
 
             //erase rows for all the temporary calculation tables
-            await database.executeNonQuery("truncate table _diff ;");
-            await database.executeNonQuery("truncate table _delete ;");
-            await database.executeNonQuery("truncate table _vchnumber ;");
+            await getDatabaseInstance().executeNonQuery(
+              "truncate table _diff ;"
+            );
+            await getDatabaseInstance().executeNonQuery(
+              "truncate table _delete ;"
+            );
+            await getDatabaseInstance().executeNonQuery(
+              "truncate table _vchnumber ;"
+            );
           } else
             logger.logMessage(
               "Incremental Sync is supported only for SQL Server / MySQL / PostgreSQL"
@@ -437,7 +452,7 @@ class _tally {
 
           if (
             /^(mssql|mysql|postgres|bigquery|csv)$/g.test(
-              database.config.technology
+              getDatabaseInstance().config.technology
             )
           ) {
             //update active company information before starting import
@@ -487,12 +502,22 @@ class _tally {
           }
 
           if (this.truncateTable) {
-            if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
-              await database.truncateTables(lstTables.map((p) => p.name)); //truncate tables
+            if (
+              /^(mssql|mysql|postgres)$/g.test(
+                getDatabaseInstance().config.technology
+              )
+            ) {
+              await getDatabaseInstance().truncateTables(
+                lstTables.map((p) => p.name)
+              ); //truncate tables
             }
           }
 
-          if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
+          if (
+            /^(mssql|mysql|postgres)$/g.test(
+              getDatabaseInstance().config.technology
+            )
+          ) {
             //perform CSV file based bulk import into database
             logger.logMessage(
               "Loading CSV files to database tables [%s]",
@@ -500,7 +525,7 @@ class _tally {
             );
             for (let i = 0; i < lstTables.length; i++) {
               let targetTable = lstTables[i].name;
-              let rowCount = await database.bulkLoad(
+              let rowCount = await getDatabaseInstance().bulkLoad(
                 path.join(process.cwd(), `./csv/${targetTable}.data`),
                 targetTable,
                 lstTables[i].fields.map((p) => p.type)
@@ -516,12 +541,12 @@ class _tally {
             }
             fs.rmdirSync("./csv"); //remove directory
           } else if (
-            database.config.technology == "csv" ||
-            database.config.technology == "json" ||
-            database.config.technology == "bigquery" ||
-            database.config.technology == "adls"
+            getDatabaseInstance().config.technology == "csv" ||
+            getDatabaseInstance().config.technology == "json" ||
+            getDatabaseInstance().config.technology == "bigquery" ||
+            getDatabaseInstance().config.technology == "adls"
           ) {
-            if (database.config.technology == "bigquery") {
+            if (getDatabaseInstance().config.technology == "bigquery") {
               logger.logMessage(
                 "Loading CSV files to BigQuery tables [%s]",
                 new Date().toLocaleString()
@@ -536,22 +561,33 @@ class _tally {
                 `./csv/${targetTable}.data`,
                 "utf-8"
               );
-              if (database.config.technology == "json") {
+              if (getDatabaseInstance().config.technology == "json") {
                 content = JSON.stringify(
-                  database.csvToJsonArray(content, targetTable, lstFieldTypes)
+                  getDatabaseInstance().csvToJsonArray(
+                    content,
+                    targetTable,
+                    lstFieldTypes
+                  )
                 );
               } else {
-                content = database.convertCSV(content, lstFieldTypes);
+                content = getDatabaseInstance().convertCSV(
+                  content,
+                  lstFieldTypes
+                );
               }
               fs.writeFileSync(
                 `./csv/${targetTable}.${
-                  database.config.technology == "json" ? "json" : "csv"
+                  getDatabaseInstance().config.technology == "json"
+                    ? "json"
+                    : "csv"
                 }`,
                 "\ufeff" + content
               );
               fs.unlinkSync(`./csv/${targetTable}.data`); //delete raw file
-              if (database.config.technology == "bigquery") {
-                let rowCount = await database.uploadGoogleBigQuery(targetTable);
+              if (getDatabaseInstance().config.technology == "bigquery") {
+                let rowCount = await getDatabaseInstance().uploadGoogleBigQuery(
+                  targetTable
+                );
                 logger.logMessage(
                   "  %s: imported %d rows",
                   targetTable,
@@ -561,8 +597,8 @@ class _tally {
             }
 
             //upload CSV files to Azure Data Lake
-            if (database.config.technology == "adls") {
-              await database.uploadAzureDataLake(lstTables);
+            if (getDatabaseInstance().config.technology == "adls") {
+              await getDatabaseInstance().uploadAzureDataLake(lstTables);
             }
           } else;
         }
@@ -571,7 +607,9 @@ class _tally {
         logger.logError("tally.importData()", err);
         reject(err);
       } finally {
-        await database.closeConnectionPool();
+        if (dbConnectionOpened) {
+          await getDatabaseInstance().closeConnectionPool();
+        }
       }
     });
   }
@@ -582,11 +620,11 @@ class _tally {
         //acquire last AlterID of master & transaction from Tally (for current company)
         let xmlPayLoad =
           '<?xml version="1.0" encoding="utf-8"?><ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>MyReport</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>ASCII (Comma Delimited)</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><REPORT NAME="MyReport"><FORMS>MyForm</FORMS></REPORT><FORM NAME="MyForm"><PARTS>MyPart</PARTS></FORM><PART NAME="MyPart"><LINES>MyLine</LINES><REPEAT>MyLine : MyCollection</REPEAT><SCROLLED>Vertical</SCROLLED></PART><LINE NAME="MyLine"><FIELDS>FldAlterMaster,FldAlterTransaction</FIELDS></LINE><FIELD NAME="FldAlterMaster"><SET>$AltMstId</SET></FIELD><FIELD NAME="FldAlterTransaction"><SET>$AltVchId</SET></FIELD><COLLECTION NAME="MyCollection"><TYPE>Company</TYPE><FILTER>FilterActiveCompany</FILTER></COLLECTION><SYSTEM TYPE="Formulae" NAME="FilterActiveCompany">$$IsEqual:##SVCurrentCompany:$Name</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
-        if (tally.config.company) {
+        if (this.config.company) {
           // substitute company name if found
           xmlPayLoad = xmlPayLoad.replace(
             "##SVCurrentCompany",
-            `"${utility.String.escapeHTML(tally.config.company)}"`
+            `"${utility.String.escapeHTML(this.config.company)}"`
           );
         }
         let contentLastAlterIdTally = await this.postTallyXML(xmlPayLoad);
@@ -594,14 +632,14 @@ class _tally {
           //target company is closed
           this.lastAlterIdMaster = -1;
           this.lastAlterIdTransaction - 1;
-          if (!tally.config.company) {
+          if (!this.config.company) {
             logger.logMessage("No company open in Tally");
             return reject(
               "Please select one or more company in Tally to sync data"
             );
           } else {
             logger.logMessage(
-              `Specified company "${tally.config.company}" is closed in Tally`
+              `Specified company "${this.config.company}" is closed in Tally`
             );
             return reject("Please select target company in Tally to sync data");
           }
@@ -795,16 +833,24 @@ class _tally {
           let altIdTransaction = parseInt(lstCompanyInfoParts[5]);
 
           //clear config table of database and insert active company info to config table
-          if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
-            await database.executeNonQuery("truncate table config;");
-            await database.executeNonQuery(
+          if (
+            /^(mssql|mysql|postgres)$/g.test(
+              getDatabaseInstance().config.technology
+            )
+          ) {
+            await getDatabaseInstance().executeNonQuery(
+              "truncate table config;"
+            );
+            await getDatabaseInstance().executeNonQuery(
               `insert into config(name,value) values('Update Timestamp','${new Date().toLocaleString()}'),('Company Name','${companyName}'),('Period From','${
                 this.config.fromdate
               }'),('Period To','${
                 this.config.todate
               }'),('Last AlterID Master','${altIdMaster}'),('Last AlterID Transaction','${altIdTransaction}');`
             );
-          } else if (/^(csv|bigquery)$/g.test(database.config.technology)) {
+          } else if (
+            /^(csv|bigquery)$/g.test(getDatabaseInstance().config.technology)
+          ) {
             let csvContent = `name,value\r\nUpdate Timestamp,${new Date()
               .toLocaleString()
               .replace(
@@ -818,21 +864,21 @@ class _tally {
             fs.writeFileSync("./csv/config.csv", csvContent, {
               encoding: "utf-8",
             });
-            if (database.config.technology == "bigquery") {
-              await database.uploadGoogleBigQuery("config");
+            if (getDatabaseInstance().config.technology == "bigquery") {
+              await getDatabaseInstance().uploadGoogleBigQuery("config");
             }
           } else {
             return reject("Invalid platform selected");
           }
         } else {
-          if (!tally.config.company) {
+          if (!this.config.company) {
             logger.logMessage("No company open in Tally");
             return reject(
               "Please select one or more company in Tally to sync data"
             );
           } else {
             logger.logMessage(
-              `Specified company "${tally.config.company}" is closed in Tally`
+              `Specified company "${this.config.company}" is closed in Tally`
             );
             return reject("Please select target company in Tally to sync data");
           }
@@ -962,6 +1008,17 @@ class _tally {
     return retval;
   }
 }
-let tally = new _tally();
+let tallyInstance: _tally | null = null;
 
-export { tally };
+function initialize(configPath?: string): void {
+  tallyInstance = new _tally(configPath);
+}
+
+function getInstance(): _tally {
+  if (!tallyInstance) {
+    tallyInstance = new _tally();
+  }
+  return tallyInstance;
+}
+
+export { tallyInstance as tally, initialize, getInstance };

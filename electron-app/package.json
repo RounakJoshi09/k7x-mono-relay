@@ -7,9 +7,10 @@
   "author": "Tally Database Loader Team",
   "license": "ISC",
   "scripts": {
-    "build": "tsc && npm run copy-files",
+    "build": "npm run build:core && tsc && npm run copy-files",
+    "build:core": "cd core && tsc",
     "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/",
-    "build:watch": "tsc --watch",
+    "build:watch": "npm run build:core && tsc --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
     "pack": "npm run build && electron-builder --dir --publish=never",

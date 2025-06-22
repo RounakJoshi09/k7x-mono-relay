@@ -26,11 +26,10 @@ class _database {
   bigquery: BigQuery = new BigQuery();
   connectionPoolPostgres: postgres.Pool = new postgres.Pool({});
 
-  constructor() {
+  constructor(configPath?: string) {
     try {
-      this.config = JSON.parse(fs.readFileSync("./config.json", "utf8"))[
-        "database"
-      ];
+      const configFile = configPath || "./config.json";
+      this.config = JSON.parse(fs.readFileSync(configFile, "utf8"))["database"];
     } catch (err) {
       logger.logError("database()", err);
       throw err;
@@ -221,7 +220,9 @@ class _database {
         if (this.config.technology == "postgres") {
           await this.connectionPoolPostgres.end();
         } else if (this.config.technology == "mysql") {
-          await connectionPoolMysql.promise().end();
+          if (connectionPoolMysql) {
+            await connectionPoolMysql.promise().end();
+          }
         } else;
 
         // Close SSH tunnel if it exists
@@ -621,6 +622,10 @@ class _database {
       });
     };
     return new Promise<queryResult>((resolve, reject) => {
+      if (!connectionPoolMysql) {
+        reject(new Error("MySQL connection pool not initialized"));
+        return;
+      }
       connectionPoolMysql.getConnection(async (connErr, connection) => {
         try {
           if (connErr) {
@@ -1067,6 +1072,17 @@ class _database {
     });
   }
 }
-let database = new _database();
+let databaseInstance: _database | null = null;
 
-export { database };
+function initialize(configPath?: string): void {
+  databaseInstance = new _database(configPath);
+}
+
+function getInstance(): _database {
+  if (!databaseInstance) {
+    databaseInstance = new _database();
+  }
+  return databaseInstance;
+}
+
+export { databaseInstance as database, initialize, getInstance };

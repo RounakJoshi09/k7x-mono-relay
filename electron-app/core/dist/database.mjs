@@ -15,9 +15,10 @@ class _database {
     config;
     bigquery = new BigQuery();
     connectionPoolPostgres = new postgres.Pool({});
-    constructor() {
+    constructor(configPath) {
         try {
-            this.config = JSON.parse(fs.readFileSync("./config.json", "utf8"))["database"];
+            const configFile = configPath || "./config.json";
+            this.config = JSON.parse(fs.readFileSync(configFile, "utf8"))["database"];
         }
         catch (err) {
             logger.logError("database()", err);
@@ -1011,6 +1012,15 @@ class _database {
         });
     }
 }
-let database = new _database();
-export { database };
+let databaseInstance = null;
+function initialize(configPath) {
+    databaseInstance = new _database(configPath);
+}
+function getInstance() {
+    if (!databaseInstance) {
+        databaseInstance = new _database();
+    }
+    return databaseInstance;
+}
+export { databaseInstance as database, initialize, getInstance };
 //# sourceMappingURL=database.mjs.map

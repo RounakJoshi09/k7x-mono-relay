@@ -221,7 +221,9 @@ class _database {
         if (this.config.technology == "postgres") {
           await this.connectionPoolPostgres.end();
         } else if (this.config.technology == "mysql") {
-          await connectionPoolMysql.promise().end();
+          if (connectionPoolMysql) {
+            await connectionPoolMysql.promise().end();
+          }
         } else;
 
         // Close SSH tunnel if it exists
@@ -621,6 +623,10 @@ class _database {
       });
     };
     return new Promise<queryResult>((resolve, reject) => {
+      if (!connectionPoolMysql) {
+        reject(new Error("MySQL connection pool not initialized"));
+        return;
+      }
       connectionPoolMysql.getConnection(async (connErr, connection) => {
         try {
           if (connErr) {

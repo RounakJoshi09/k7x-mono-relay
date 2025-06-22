@@ -84,6 +84,7 @@ class _tally {
 
   importData(): Promise<void> {
     return new Promise<void>(async (resolve, reject) => {
+      let dbConnectionOpened = false;
       try {
         logger.logMessage("Tally to Database | version: 1.0.36");
 
@@ -104,6 +105,7 @@ class _tally {
         }
 
         await database.openConnectionPool();
+        dbConnectionOpened = true;
 
         if (this.config.sync == "incremental") {
           if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
@@ -158,15 +160,6 @@ class _tally {
             await this.updateLastAlterId(); //Update last alter ID
             let lastAlterIdMasterTally = this.lastAlterIdMaster;
             let lastAlterIdTransactionTally = this.lastAlterIdTransaction;
-
-            //acquire last AlterID of master & transaction from database
-            // let lstPrimaryMasterTableNames = this.lstTableMaster.filter(p => p.nature == 'Primary').map(p => p.name);
-            // let sqlQuery = 'select max(coalesce(t.alterid,0)) from (';
-            // lstPrimaryMasterTableNames.forEach(p => sqlQuery += ` select max(alterid) as alterid from ${p} union`);
-            // sqlQuery = utility.String.strip(sqlQuery, 5);
-            // sqlQuery += ') as t';
-            // let lastAlterIdMasterDatabase = await database.executeScalar<number>(sqlQuery) || 0;
-            // let lastAlterIdTransactionDatabase = await database.executeScalar<number>('select max(coalesce(alterid,0)) from trn_voucher') || 0;
 
             //calculate flags to determine what changed
             let flgIsMasterChanged =
@@ -571,7 +564,9 @@ class _tally {
         logger.logError("tally.importData()", err);
         reject(err);
       } finally {
-        await database.closeConnectionPool();
+        if (dbConnectionOpened) {
+          await database.closeConnectionPool();
+        }
       }
     });
   }

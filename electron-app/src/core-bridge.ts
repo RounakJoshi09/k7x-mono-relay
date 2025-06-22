@@ -455,11 +455,14 @@ export class TallyDatabaseCore extends EventEmitter {
   private getCorePath(): string {
     return app.isPackaged
       ? path.join(process.resourcesPath, "core")
-      : path.join(__dirname, "../core");
+      : path.join(__dirname, "../core/dist");
   }
 
   private configToArgs(config: AppConfig): string[] {
     const args: string[] = [];
+
+    // Add config path argument
+    args.push("--config-path", this.configPath);
 
     // Database args
     args.push("--database-technology", config.database.technology);

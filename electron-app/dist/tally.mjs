@@ -74,7 +74,6 @@ class _tally {
     }
     importData() {
         return new Promise(async (resolve, reject) => {
-            let dbConnectionOpened = false;
             try {
                 logger.logMessage("Tally to Database | version: 1.0.36");
                 //Load YAML export definition file
@@ -90,7 +89,6 @@ class _tally {
                     return;
                 }
                 await database.openConnectionPool();
-                dbConnectionOpened = true;
                 if (this.config.sync == "incremental") {
                     if (/^(mssql|mysql|postgres)$/g.test(database.config.technology)) {
                         //set mandatory config required for incremental sync
@@ -118,6 +116,14 @@ class _tally {
                         await this.updateLastAlterId(); //Update last alter ID
                         let lastAlterIdMasterTally = this.lastAlterIdMaster;
                         let lastAlterIdTransactionTally = this.lastAlterIdTransaction;
+                        //acquire last AlterID of master & transaction from database
+                        // let lstPrimaryMasterTableNames = this.lstTableMaster.filter(p => p.nature == 'Primary').map(p => p.name);
+                        // let sqlQuery = 'select max(coalesce(t.alterid,0)) from (';
+                        // lstPrimaryMasterTableNames.forEach(p => sqlQuery += ` select max(alterid) as alterid from ${p} union`);
+                        // sqlQuery = utility.String.strip(sqlQuery, 5);
+                        // sqlQuery += ') as t';
+                        // let lastAlterIdMasterDatabase = await database.executeScalar<number>(sqlQuery) || 0;
+                        // let lastAlterIdTransactionDatabase = await database.executeScalar<number>('select max(coalesce(alterid,0)) from trn_voucher') || 0;
                         //calculate flags to determine what changed
                         let flgIsMasterChanged = lastAlterIdMasterTally != lastAlterIdMasterDatabase;
                         let flgIsTransactionChanged = lastAlterIdTransactionTally != lastAlterIdTransactionDatabase;
@@ -378,9 +384,7 @@ class _tally {
                 reject(err);
             }
             finally {
-                if (dbConnectionOpened) {
-                    await database.closeConnectionPool();
-                }
+                await database.closeConnectionPool();
             }
         });
     }
