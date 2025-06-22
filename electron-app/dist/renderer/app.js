@@ -16,7 +16,7 @@ class TallyDatabaseApp {
   async init() {
     try {
       // Initialize the application
-      await this.loadAppVersion();
+      // await this.loadAppVersion(); // Commented out - not used in new design
       await this.loadConfiguration();
       this.setupEventListeners();
       this.setupIPCListeners();
@@ -32,7 +32,10 @@ class TallyDatabaseApp {
   async loadAppVersion() {
     try {
       const version = await window.tallyAPI.getAppVersion();
-      document.getElementById("app-version").textContent = `v${version}`;
+      const versionElement = document.getElementById("app-version");
+      if (versionElement) {
+        versionElement.textContent = `v${version}`;
+      }
     } catch (error) {
       console.error("Failed to load app version:", error);
     }
@@ -75,6 +78,28 @@ class TallyDatabaseApp {
   }
 
   setupEventListeners() {
+    // Visual Database selector events
+    const dbOptions = document.querySelectorAll(".db-option");
+    dbOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        dbOptions.forEach((opt) => opt.classList.remove("active"));
+        option.classList.add("active");
+        document.getElementById("db-technology").value = option.dataset.db;
+        this.onDatabaseTechnologyChange();
+      });
+    });
+
+    // Visual Sync mode selector events
+    const modeOptions = document.querySelectorAll(".mode-option");
+    modeOptions.forEach((option) => {
+      option.addEventListener("click", () => {
+        modeOptions.forEach((opt) => opt.classList.remove("active"));
+        option.classList.add("active");
+        document.getElementById("sync-mode").value = option.dataset.mode;
+        this.onSyncModeChange();
+      });
+    });
+
     // Database form events
     document
       .getElementById("db-technology")
@@ -221,6 +246,7 @@ class TallyDatabaseApp {
     this.onDatabaseTechnologyChange();
     this.onSyncModeChange();
     this.onDateRangeChange();
+    this.updateVisualSelectors();
   }
 
   getConfigFromForm() {
@@ -477,48 +503,54 @@ class TallyDatabaseApp {
   updateSyncStatus(status) {
     this.syncStatus = status;
 
-    // Update status text and badge
-    const statusText = document.getElementById("sync-status-text");
-    const statusBadge = statusText.className
-      .split(" ")
-      .find((cls) => cls.startsWith("bg-"));
-
-    statusText.textContent = status.message;
-    statusText.className = statusText.className.replace(statusBadge, "");
-
-    if (status.isRunning) {
-      statusText.classList.add("bg-primary");
-    } else if (status.error) {
-      statusText.classList.add("bg-danger");
-    } else {
-      statusText.classList.add("bg-success");
+    // Update status badge
+    const statusBadge = document.querySelector(".status-badge");
+    if (statusBadge) {
+      statusBadge.textContent = status.message;
+      statusBadge.className =
+        "status-badge " +
+        (status.isRunning
+          ? "status-running"
+          : status.error
+          ? "status-error"
+          : "status-ready");
     }
 
     // Update progress bar
-    const progressBar = document.getElementById("sync-progress-bar");
-    progressBar.style.width = `${status.progress}%`;
-    progressBar.setAttribute("aria-valuenow", status.progress);
+    const progressBar = document.getElementById("progressFill");
+    if (progressBar) {
+      progressBar.style.width = `${status.progress}%`;
+    }
 
-    // Update current table info
-    document.getElementById("current-table").textContent = status.currentTable
-      ? `Processing: ${status.currentTable}`
-      : "-";
+    const progressPercentage = document.querySelector(".progress-percentage");
+    if (progressPercentage) {
+      progressPercentage.textContent = `${Math.round(status.progress)}%`;
+    }
 
-    // Update sync times
-    const syncTimes = document.getElementById("sync-times");
-    if (syncTimes) {
-      let timeText = "";
-      if (status.startTime) {
-        timeText = `Started: ${new Date(
-          status.startTime
-        ).toLocaleTimeString()}`;
-      }
-      if (status.endTime) {
-        timeText += ` | Ended: ${new Date(
-          status.endTime
-        ).toLocaleTimeString()}`;
-      }
-      syncTimes.textContent = timeText;
+    // Update records count
+    const recordsCount = document.getElementById("recordsCount");
+    if (recordsCount && status.recordsProcessed) {
+      recordsCount.textContent = status.recordsProcessed.toLocaleString();
+    }
+
+    // Update elapsed time
+    const elapsedTime = document.getElementById("elapsedTime");
+    if (elapsedTime && status.startTime) {
+      const elapsed = status.endTime
+        ? new Date(status.endTime) - new Date(status.startTime)
+        : Date.now() - new Date(status.startTime);
+      const hours = Math.floor(elapsed / 3600000);
+      const minutes = Math.floor((elapsed % 3600000) / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
+      elapsedTime.textContent = `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    }
+
+    // Update records per second
+    const recordsPerSec = document.getElementById("recordsPerSec");
+    if (recordsPerSec && status.recordsPerSecond) {
+      recordsPerSec.textContent = Math.round(status.recordsPerSecond);
     }
 
     this.updateSyncButtons(status.isRunning);
@@ -562,14 +594,18 @@ class TallyDatabaseApp {
   }
 
   addLogMessage(message) {
-    const logContainer = document.getElementById("log-container");
+    const logContainer =
+      document.getElementById("logsContainer") ||
+      document.getElementById("log-container");
+    if (!logContainer) return;
+
     const logLine = document.createElement("div");
-    logLine.className = "log-line";
+    logLine.className = "log-entry log-info";
 
     const timestamp = new Date().toLocaleTimeString();
-    logLine.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${this.formatLogMessage(
+    logLine.innerHTML = `<span class="log-timestamp">${timestamp}</span><span class="log-message">${this.formatLogMessage(
       message
-    )}`;
+    )}</span>`;
 
     logContainer.appendChild(logLine);
     logContainer.scrollTop = logContainer.scrollHeight;
@@ -602,8 +638,13 @@ class TallyDatabaseApp {
   async clearLogs() {
     try {
       await window.tallyAPI.clearLogs();
-      document.getElementById("log-container").innerHTML =
-        '<div class="text-muted">Logs cleared...</div>';
+      const logContainer =
+        document.getElementById("logsContainer") ||
+        document.getElementById("log-container");
+      if (logContainer) {
+        logContainer.innerHTML =
+          '<div class="log-entry log-info"><span class="log-timestamp">--:--:--</span><span class="log-message">Logs cleared...</span></div>';
+      }
       this.showToast("Success", "Logs cleared", "success");
     } catch (error) {
       this.showToast("Error", "Failed to clear logs", "error");
@@ -709,52 +750,80 @@ class TallyDatabaseApp {
     this.showToast("Info", "New configuration created", "info");
   }
 
+  updateVisualSelectors() {
+    // Update visual database selector to match hidden select
+    const dbTechnology = document.getElementById("db-technology").value;
+    const dbOptions = document.querySelectorAll(".db-option");
+    dbOptions.forEach((option) => {
+      option.classList.remove("active");
+      if (option.dataset.db === dbTechnology) {
+        option.classList.add("active");
+      }
+    });
+
+    // Update visual sync mode selector to match hidden select
+    const syncMode = document.getElementById("sync-mode").value;
+    const modeOptions = document.querySelectorAll(".mode-option");
+    modeOptions.forEach((option) => {
+      option.classList.remove("active");
+      if (option.dataset.mode === syncMode) {
+        option.classList.add("active");
+      }
+    });
+  }
+
   updateUI() {
     // Perform any additional UI updates
     this.onDatabaseTechnologyChange();
     this.onSyncModeChange();
     this.onDateRangeChange();
     this.onSSHToggle();
+    this.updateVisualSelectors();
   }
 
   showToast(title, message, type = "info") {
-    const toastContainer = document.getElementById("toast-container");
-    const toastId = `toast-${Date.now()}`;
+    // Use the modern toast system defined in the HTML
+    if (window.showToast) {
+      window.showToast(message, type);
+      return;
+    }
 
-    const bgClass =
+    // Fallback to container-based toasts
+    const toastContainer = document.getElementById("toastContainer");
+    if (!toastContainer) return;
+
+    const toastId = `toast-${Date.now()}`;
+    const iconClass =
       {
-        success: "bg-success",
-        error: "bg-danger",
-        warning: "bg-warning",
-        info: "bg-info",
-      }[type] || "bg-info";
+        success: "bi-check-circle",
+        error: "bi-x-circle",
+        warning: "bi-exclamation-triangle",
+        info: "bi-info-circle",
+      }[type] || "bi-info-circle";
 
     const toastHTML = `
-            <div id="${toastId}" class="toast" role="alert" data-bs-autohide="true" data-bs-delay="5000">
-                <div class="toast-header ${bgClass} text-white">
-                    <strong class="me-auto">${title}</strong>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
-                </div>
-                <div class="toast-body">
-                    ${message}
-                </div>
-            </div>
-        `;
+      <div class="toast-notification toast-${type}" id="${toastId}">
+        <i class="bi ${iconClass}"></i>
+        <span>${message}</span>
+        <button class="toast-close"><i class="bi bi-x"></i></button>
+      </div>
+    `;
 
     toastContainer.insertAdjacentHTML("beforeend", toastHTML);
 
     const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement);
-    toast.show();
+    setTimeout(() => toastElement.classList.add("show"), 100);
 
-    // Remove toast element after it's hidden
-    toastElement.addEventListener("hidden.bs.toast", () => {
-      toastElement.remove();
+    toastElement.querySelector(".toast-close").addEventListener("click", () => {
+      toastElement.classList.remove("show");
+      setTimeout(() => toastElement.remove(), 300);
     });
+
+    setTimeout(() => {
+      toastElement.classList.remove("show");
+      setTimeout(() => toastElement.remove(), 300);
+    }, 5000);
   }
 }
 
-// Initialize the application when the DOM is loaded
-document.addEventListener("DOMContentLoaded", () => {
-  new TallyDatabaseApp();
-});
+// Application class is now initialized from index.html after all resources are loaded

@@ -3,485 +3,604 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tally Database Loader</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="./styles.css" rel="stylesheet">
+    <title>Tally Database Loader Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link href="styles.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container-fluid">
-        <!-- Header -->
-        <header class="bg-primary text-white p-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-database-gear fs-2 me-3"></i>
-                    <div>
-                        <h1 class="h3 mb-0">Tally Database Loader</h1>
-                        <small>Synchronize Tally Prime data with databases</small>
+    <div class="page-loader" id="pageLoader">
+        <div class="loader-content">
+            <div class="spinner-modern"></div>
+            <p class="loader-text">Loading Tally Database Loader Pro...</p>
+        </div>
+    </div>
+
+    <div class="container-fluid main-container" id="mainContainer">
+        <!-- Enhanced Header with Glassmorphism Effect -->
+        <header class="header-glass animate__animated animate__fadeInDown">
+            <div class="header-content">
+                <div class="brand-section">
+                    <div class="brand-icon-wrapper">
+                        <i class="bi bi-database-gear brand-icon"></i>
+                        <div class="icon-glow"></div>
+                    </div>
+                    <div class="brand-text">
+                        <h1 class="brand-title">Tally Database Loader Pro</h1>
+                        <p class="brand-subtitle">Advanced Synchronization Platform</p>
                     </div>
                 </div>
-                <div class="d-flex align-items-center">
-                    <div class="status-indicator me-3">
-                        <span id="connection-status" class="badge bg-secondary">
-                            <i class="bi bi-circle-fill"></i> Ready
-                        </span>
+                <div class="status-section">
+                    <div class="connection-indicator" id="connectionStatus">
+                        <div class="status-dot status-ready"></div>
+                        <span class="status-text">System Ready</span>
                     </div>
-                    <span id="app-version" class="small text-light opacity-75">v1.0.0</span>
+                    <div class="theme-toggle" id="themeToggle">
+                        <i class="bi bi-moon-fill"></i>
+                    </div>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content -->
-        <div class="row" style="overflow-y: scroll;">
+        <!-- Main Content Grid -->
+        <div class="content-grid animate__animated animate__fadeInUp">
             <!-- Configuration Panel -->
-            <div class="col-md-8">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <ul class="nav nav-tabs card-header-tabs" id="config-tabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="database-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#database-panel" type="button" role="tab">
-                                    <i class="bi bi-database"></i> Database
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tally-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#tally-panel" type="button" role="tab">
-                                    <i class="bi bi-building"></i> Tally
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#advanced-panel" type="button" role="tab">
-                                    <i class="bi bi-gear"></i> Advanced
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="card-body">
-                        <div class="tab-content" id="config-tab-content">
-                            <!-- Database Configuration -->
-                            <div class="tab-pane fade show active" id="database-panel" role="tabpanel">
-                                <form id="database-form">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="db-technology" class="form-label">Database Technology</label>
-                                                <select class="form-select" id="db-technology" required>
-                                                    <option value="mysql">MySQL</option>
-                                                    <option value="mssql">SQL Server</option>
-                                                    <option value="postgres">PostgreSQL</option>
-                                                    <option value="bigquery">Google BigQuery</option>
-                                                    <option value="adls">Azure Data Lake</option>
-                                                    <option value="csv">CSV Files</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="db-load-method" class="form-label">Load Method</label>
-                                                <select class="form-select" id="db-load-method" required>
-                                                    <option value="insert">Insert</option>
-                                                    <option value="file">Bulk Load</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-8">
-                                            <div class="mb-3">
-                                                <label for="db-server" class="form-label">Server</label>
-                                                <input type="text" class="form-control" id="db-server" 
-                                                    placeholder="localhost or IP address" required>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label for="db-port" class="form-label">Port</label>
-                                                <input type="number" class="form-control" id="db-port" 
-                                                    min="1" max="65535" required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label for="db-schema" class="form-label">Schema/Database</label>
-                                                <input type="text" class="form-control" id="db-schema" 
-                                                    placeholder="Database name" required>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label for="db-username" class="form-label">Username</label>
-                                                <input type="text" class="form-control" id="db-username" required>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label for="db-password" class="form-label">Password</label>
-                                                <input type="password" class="form-control" id="db-password" required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="db-ssl">
-                                                <label class="form-check-label" for="db-ssl">
-                                                    Use SSL Connection
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- SSH Tunnel Configuration -->
-                                    <div class="mt-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="ssh-enabled">
-                                            <label class="form-check-label" for="ssh-enabled">
-                                                <strong>Enable SSH Tunnel</strong>
-                                            </label>
-                                        </div>
-                                        
-                                        <div id="ssh-config" class="mt-3" style="display: none;">
-                                            <div class="row">
-                                                <div class="col-md-8">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-host" class="form-label">SSH Host</label>
-                                                        <input type="text" class="form-control" id="ssh-host" 
-                                                            placeholder="SSH server hostname or IP">
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-port" class="form-label">SSH Port</label>
-                                                        <input type="number" class="form-control" id="ssh-port" 
-                                                            value="22" min="1" max="65535">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-username" class="form-label">SSH Username</label>
-                                                        <input type="text" class="form-control" id="ssh-username">
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-password" class="form-label">SSH Password</label>
-                                                        <input type="password" class="form-control" id="ssh-password">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="row">
-                                                <div class="col-md-12">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-private-key" class="form-label">Private Key (optional)</label>
-                                                        <textarea class="form-control" id="ssh-private-key" rows="4" 
-                                                            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="row">
-                                                <div class="col-md-4">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-local-port" class="form-label">Local Port</label>
-                                                        <input type="number" class="form-control" id="ssh-local-port" 
-                                                            value="3307" min="1" max="65535">
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-remote-host" class="form-label">Remote Host</label>
-                                                        <input type="text" class="form-control" id="ssh-remote-host" 
-                                                            value="localhost">
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-4">
-                                                    <div class="mb-3">
-                                                        <label for="ssh-remote-port" class="form-label">Remote Port</label>
-                                                        <input type="number" class="form-control" id="ssh-remote-port" 
-                                                            value="3306" min="1" max="65535">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="mt-4">
-                                        <button type="button" class="btn btn-outline-primary" id="test-db-connection">
-                                            <i class="bi bi-plug"></i> Test Connection
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <!-- Tally Configuration -->
-                            <div class="tab-pane fade" id="tally-panel" role="tabpanel">
-                                <form id="tally-form">
-                                    <div class="row">
-                                        <div class="col-md-8">
-                                            <div class="mb-3">
-                                                <label for="tally-server" class="form-label">Tally Server</label>
-                                                <input type="text" class="form-control" id="tally-server" 
-                                                    placeholder="localhost or Tally server IP" required>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="mb-3">
-                                                <label for="tally-port" class="form-label">Port</label>
-                                                <input type="number" class="form-control" id="tally-port" 
-                                                    value="9000" min="1" max="65535" required>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <div class="mb-3">
-                                                <label for="tally-company" class="form-label">Company Name</label>
-                                                <input type="text" class="form-control" id="tally-company" 
-                                                    placeholder="Select or enter company name" list="company-list">
-                                                <datalist id="company-list"></datalist>
-                                                <div class="form-text">Leave empty for currently open company</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="sync-mode" class="form-label">Sync Mode</label>
-                                                <select class="form-select" id="sync-mode" required>
-                                                    <option value="full">Full Sync</option>
-                                                    <option value="incremental">Incremental Sync</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="sync-frequency" class="form-label">Frequency (minutes)</label>
-                                                <input type="number" class="form-control" id="sync-frequency" 
-                                                    value="0" min="0" max="1440">
-                                                <div class="form-text">0 = One-time sync</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <div class="mb-3">
-                                                <label class="form-label">Date Range</label>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="date-range" 
-                                                        id="date-auto" value="auto" checked>
-                                                    <label class="form-check-label" for="date-auto">
-                                                        Auto (Current financial year)
-                                                    </label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="date-range" 
-                                                        id="date-custom" value="custom">
-                                                    <label class="form-check-label" for="date-custom">
-                                                        Custom Date Range
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div id="custom-date-range" class="row" style="display: none;">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="from-date" class="form-label">From Date</label>
-                                                <input type="date" class="form-control" id="from-date">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="to-date" class="form-label">To Date</label>
-                                                <input type="date" class="form-control" id="to-date">
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="mt-4">
-                                        <button type="button" class="btn btn-outline-primary me-2" id="test-tally-connection">
-                                            <i class="bi bi-plug"></i> Test Connection
-                                        </button>
-                                        <button type="button" class="btn btn-outline-secondary" id="load-companies">
-                                            <i class="bi bi-building"></i> Load Companies
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <!-- Advanced Configuration -->
-                            <div class="tab-pane fade" id="advanced-panel" role="tabpanel">
-                                <div class="row">
-                                    <div class="col-md-12">
-                                        <div class="mb-3">
-                                            <label for="definition-file" class="form-label">Definition File</label>
-                                            <select class="form-select" id="definition-file">
-                                                <option value="tally-export-config.yaml">Full Export (tally-export-config.yaml)</option>
-                                                <option value="tally-export-config-incremental.yaml">Incremental Export (tally-export-config-incremental.yaml)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-12">
-                                        <h6>Performance Settings</h6>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="truncate-tables" checked>
-                                            <label class="form-check-label" for="truncate-tables">
-                                                Truncate tables before sync
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="import-master" checked>
-                                            <label class="form-check-label" for="import-master">
-                                                Import master data
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="import-transactions" checked>
-                                            <label class="form-check-label" for="import-transactions">
-                                                Import transaction data
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="mt-4">
-                                    <h6>Backup & Restore</h6>
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-outline-secondary" id="export-config">
-                                            <i class="bi bi-download"></i> Export Configuration
-                                        </button>
-                                        <button type="button" class="btn btn-outline-secondary" id="import-config">
-                                            <i class="bi bi-upload"></i> Import Configuration
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Status & Control Panel -->
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-activity"></i> Sync Status
-                        </h5>
-                        <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-secondary" id="refresh-status">
-                                <i class="bi bi-arrow-clockwise"></i>
+            <div class="config-panel">
+                <div class="glass-card main-config-card">
+                    <div class="card-header-modern">
+                        <h2 class="card-title">
+                            <i class="bi bi-gear-fill"></i>
+                            Configuration Center
+                        </h2>
+                        <div class="header-actions">
+                            <button class="btn-icon" id="save-config" title="Save Configuration">
+                                <i class="bi bi-bookmark-fill"></i>
+                            </button>
+                            <button class="btn-icon" id="load-config" title="Load Configuration">
+                                <i class="bi bi-folder2-open"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="card-body d-flex flex-column">
-                        <!-- Status Display -->
-                        <div class="status-display mb-4">
-                            <div class="sync-status-card p-3 border rounded">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-bold">Current Status:</span>
-                                    <span id="sync-status-text" class="badge bg-secondary">Ready</span>
+
+                    <!-- Enhanced Tab Navigation -->
+                    <div class="tab-navigation">
+                        <button class="tab-button active" data-tab="database">
+                            <i class="bi bi-database"></i>
+                            <span>Database</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                        <button class="tab-button" data-tab="tally">
+                            <i class="bi bi-calculator"></i>
+                            <span>Tally Server</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                        <button class="tab-button" data-tab="advanced">
+                            <i class="bi bi-sliders"></i>
+                            <span>Advanced</span>
+                            <div class="tab-indicator"></div>
+                        </button>
+                    </div>
+
+                    <!-- Tab Content Panels -->
+                    <div class="tab-content-container">
+                        <!-- Database Configuration Panel -->
+                        <div class="tab-panel active" id="database-panel">
+                            <div class="form-sections">
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-server"></i>Database Technology
+                                    </h3>
+                                    <div class="database-selector">
+                                        <div class="db-option active" data-db="mysql">
+                                            <div class="db-icon mysql-icon"></div>
+                                            <span>MySQL</span>
+                                        </div>
+                                        <div class="db-option" data-db="postgres">
+                                            <div class="db-icon postgresql-icon"></div>
+                                            <span>PostgreSQL</span>
+                                        </div>
+                                        <div class="db-option" data-db="mssql">
+                                            <div class="db-icon sqlserver-icon"></div>
+                                            <span>SQL Server</span>
+                                        </div>
+                                        <div class="db-option" data-db="bigquery">
+                                            <div class="db-icon bigquery-icon"></div>
+                                            <span>BigQuery</span>
+                                        </div>
+                                    </div>
+                                    <!-- Hidden select for JavaScript compatibility -->
+                                    <select id="db-technology" style="display: none;">
+                                        <option value="mysql">MySQL</option>
+                                        <option value="postgres">PostgreSQL</option>
+                                        <option value="mssql">SQL Server</option>
+                                        <option value="bigquery">BigQuery</option>
+                                        <option value="adls">Azure Data Lake</option>
+                                        <option value="csv">CSV Files</option>
+                                    </select>
                                 </div>
-                                <div class="progress mb-2" style="height: 8px;">
-                                    <div id="sync-progress-bar" class="progress-bar" role="progressbar" 
-                                        style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-hdd-network"></i>Connection Details
+                                    </h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">Server Address</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-server input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="localhost" id="db-server">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Port</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-outlet input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="3306" id="db-port">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Database Name</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-database input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="tally_data" id="db-schema">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Username</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-person input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="admin" id="db-username">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Password</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-lock input-icon"></i>
+                                                <input type="password" class="form-control-modern" placeholder="••••••••" id="db-password">
+                                                <button type="button" class="password-toggle">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="small text-muted">
-                                    <div id="current-table">-</div>
-                                    <div id="sync-times"></div>
+
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-shield-lock"></i>Security Options
+                                    </h3>
+                                    <div class="security-options">
+                                        <div class="option-card">
+                                            <div class="option-toggle">
+                                                <input type="checkbox" id="db-ssl" class="toggle-switch">
+                                                <label for="db-ssl" class="toggle-label"></label>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>SSL Encryption</h4>
+                                                <p>Secure connection with SSL/TLS encryption</p>
+                                            </div>
+                                        </div>
+                                        <div class="option-card">
+                                            <div class="option-toggle">
+                                                <input type="checkbox" id="ssh-enabled" class="toggle-switch">
+                                                <label for="ssh-enabled" class="toggle-label"></label>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>SSH Tunnel</h4>
+                                                <p>Connect through secure SSH tunnel</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Control Buttons -->
-                        <div class="control-buttons mb-4">
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-success btn-lg" id="start-sync">
-                                    <i class="bi bi-play-circle"></i> Start Sync
-                                </button>
-                                <button type="button" class="btn btn-danger" id="stop-sync" disabled>
-                                    <i class="bi bi-stop-circle"></i> Stop Sync
-                                </button>
+                        <!-- Tally Server Panel -->
+                        <div class="tab-panel" id="tally-panel">
+                            <div class="form-sections">
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-calculator"></i>Tally Server Configuration
+                                    </h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">Tally Server</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-server input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="localhost" id="tally-server">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Port</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-outlet input-icon"></i>
+                                                <input type="number" class="form-control-modern" placeholder="9000" id="tally-port">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group full-width">
+                                            <label class="form-label">Company Name</label>
+                                            <div class="input-wrapper">
+                                                <i class="bi bi-building input-icon"></i>
+                                                <input type="text" class="form-control-modern" placeholder="Leave empty for currently open company" id="tally-company">
+                                                <div class="input-validation"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-arrow-repeat"></i>Sync Configuration
+                                    </h3>
+                                    <div class="sync-options">
+                                        <div class="sync-mode-selector">
+                                            <div class="mode-option active" data-mode="full">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                                <span>Full Sync</span>
+                                                <p>Complete data synchronization</p>
+                                            </div>
+                                            <div class="mode-option" data-mode="incremental">
+                                                <i class="bi bi-arrow-down-up"></i>
+                                                <span>Incremental</span>
+                                                <p>Only changed data</p>
+                                            </div>
+                                        </div>
+                                        <!-- Hidden select for JavaScript compatibility -->
+                                        <select id="sync-mode" style="display: none;">
+                                            <option value="full">Full Sync</option>
+                                            <option value="incremental">Incremental</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Quick Actions -->
-                        <div class="quick-actions mb-4">
-                            <h6>Quick Actions</h6>
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="save-config">
-                                    <i class="bi bi-save"></i> Save Configuration
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="load-config">
-                                    <i class="bi bi-folder-open"></i> Load Configuration
-                                </button>
-                                <button type="button" class="btn btn-outline-info btn-sm" id="view-database-structure">
-                                    <i class="bi bi-diagram-3"></i> Database Structure
-                                </button>
+                        <!-- Advanced Settings Panel -->
+                        <div class="tab-panel" id="advanced-panel">
+                            <div class="form-sections">
+                                <div class="form-section">
+                                    <h3 class="section-title">
+                                        <i class="bi bi-lightning"></i>Performance Settings
+                                    </h3>
+                                    <div class="performance-grid">
+                                        <div class="performance-card">
+                                            <i class="bi bi-speedometer2"></i>
+                                            <h4>Batch Size</h4>
+                                            <input type="range" class="range-slider" min="100" max="5000" value="1000" id="batchSize">
+                                            <span class="range-value">1000</span>
+                                        </div>
+                                        <div class="performance-card">
+                                            <i class="bi bi-cpu"></i>
+                                            <h4>Threads</h4>
+                                            <input type="range" class="range-slider" min="1" max="8" value="4" id="threads">
+                                            <span class="range-value">4</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Log Display -->
-                        <div class="log-display flex-grow-1">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="mb-0">Recent Logs</h6>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-logs">
-                                    <i class="bi bi-trash"></i>
-                                </button>
+                    <!-- Hidden form elements for JavaScript compatibility -->
+                    <div style="display: none;">
+                        <select id="db-load-method">
+                            <option value="insert">Insert</option>
+                            <option value="file">File</option>
+                        </select>
+                        
+                        <!-- SSH Tunnel Fields -->
+                        <input type="text" id="ssh-host" placeholder="SSH Host">
+                        <input type="number" id="ssh-port" placeholder="22" value="22">
+                        <input type="text" id="ssh-username" placeholder="SSH Username">
+                        <input type="password" id="ssh-password" placeholder="SSH Password">
+                        <input type="text" id="ssh-private-key" placeholder="Private Key Path">
+                        <input type="number" id="ssh-local-port" placeholder="3307" value="3307">
+                        <input type="text" id="ssh-remote-host" placeholder="localhost" value="localhost">
+                        <input type="number" id="ssh-remote-port" placeholder="3306" value="3306">
+                        
+                        <!-- Date range fields -->
+                        <input type="radio" name="date-range" id="date-auto" checked>
+                        <input type="radio" name="date-range" id="date-custom">
+                        <input type="date" id="from-date">
+                        <input type="date" id="to-date">
+                        
+                        <!-- Other missing fields -->
+                        <input type="text" id="definition-file" value="tally-export-config.yaml">
+                        <input type="number" id="sync-frequency" value="0">
+                        <button id="stop-sync" style="display: none;">Stop Sync</button>
+                        <button id="save-config">Save Config</button>
+                        <button id="load-config">Load Config</button>
+                        <button id="load-companies">Load Companies</button>
+                        <button id="export-config">Export Config</button>
+                        <button id="import-config">Import Config</button>
+                        <button id="view-database-structure">View DB Structure</button>
+                        <button id="refresh-status">Refresh Status</button>
+                        
+                        <!-- Status elements -->
+                        <div id="sync-status-text">Ready</div>
+                        <div id="sync-progress-bar"></div>
+                        <div id="current-table">-</div>
+                        <div id="log-container"></div>
+                        <div id="connection-status"></div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-section">
+                        <button class="btn-modern btn-test" id="test-db-connection">
+                            <i class="bi bi-plug"></i>
+                            Test Database
+                            <div class="btn-ripple"></div>
+                        </button>
+                        <button class="btn-modern btn-test" id="test-tally-connection">
+                            <i class="bi bi-calculator"></i>
+                            Test Tally
+                            <div class="btn-ripple"></div>
+                        </button>
+                        <button class="btn-modern btn-primary" id="start-sync">
+                            <i class="bi bi-play-fill"></i>
+                            Start Synchronization
+                            <div class="btn-ripple"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status & Monitoring Panel -->
+            <div class="status-panel">
+                <!-- Live Status Card -->
+                <div class="glass-card status-card">
+                    <div class="card-header-modern">
+                        <h3 class="card-title">
+                            <i class="bi bi-activity"></i>
+                            Live Status
+                        </h3>
+                        <div class="status-badge status-ready">Ready</div>
+                    </div>
+                    <div class="status-metrics">
+                        <div class="metric-item">
+                            <div class="metric-icon">
+                                <i class="bi bi-database-check"></i>
                             </div>
-                            <div id="log-container" class="log-output border rounded p-2 small" 
-                                style="height: 200px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace;">
-                                <div class="text-muted">Logs will appear here...</div>
+                            <div class="metric-content">
+                                <span class="metric-label">Records Synced</span>
+                                <span class="metric-value" id="recordsCount">0</span>
                             </div>
                         </div>
+                        <div class="metric-item">
+                            <div class="metric-icon">
+                                <i class="bi bi-stopwatch"></i>
+                            </div>
+                            <div class="metric-content">
+                                <span class="metric-label">Elapsed Time</span>
+                                <span class="metric-value" id="elapsedTime">00:00:00</span>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-icon">
+                                <i class="bi bi-speedometer"></i>
+                            </div>
+                            <div class="metric-content">
+                                <span class="metric-label">Records/sec</span>
+                                <span class="metric-value" id="recordsPerSec">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="progress-section">
+                        <div class="progress-header">
+                            <span>Synchronization Progress</span>
+                            <span class="progress-percentage">0%</span>
+                        </div>
+                        <div class="progress-bar-modern">
+                            <div class="progress-fill" id="progressFill"></div>
+                            <div class="progress-glow"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Logs Card -->
+                <div class="glass-card logs-card">
+                    <div class="card-header-modern">
+                        <h3 class="card-title">
+                            <i class="bi bi-terminal"></i>
+                            Activity Logs
+                        </h3>
+                        <div class="header-actions">
+                            <button class="btn-icon" id="clear-logs" title="Clear Logs">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            <button class="btn-icon" id="export-logs" title="Export Logs">
+                                <i class="bi bi-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="log-entry log-info">
+                            <span class="log-timestamp">14:30:25</span>
+                            <span class="log-message">System initialized successfully</span>
+                        </div>
+                        <div class="log-entry log-success">
+                            <span class="log-timestamp">14:30:26</span>
+                            <span class="log-message">Database connection pool ready</span>
+                        </div>
+                        <div class="log-entry log-info">
+                            <span class="log-timestamp">14:30:27</span>
+                            <span class="log-message">Waiting for sync command...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Card -->
+                <div class="glass-card actions-card">
+                    <div class="card-header-modern">
+                        <h3 class="card-title">
+                            <i class="bi bi-lightning-charge"></i>
+                            Quick Actions
+                        </h3>
+                    </div>
+                    <div class="quick-actions-grid">
+                        <button class="action-button" id="save-config">
+                            <i class="bi bi-bookmark-fill"></i>
+                            <span>Save Config</span>
+                        </button>
+                        <button class="action-button" id="load-config">
+                            <i class="bi bi-folder2-open"></i>
+                            <span>Load Config</span>
+                        </button>
+                        <button class="action-button" id="view-database-structure">
+                            <i class="bi bi-diagram-3"></i>
+                            <span>View Schema</span>
+                        </button>
+                        <button class="action-button" id="refresh-status">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            <span>Refresh Status</span>
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container"></div>
-
-    <!-- Modal for Database Structure -->
-    <div class="modal fade" id="database-structure-modal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Database Structure</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <pre id="database-structure-content" class="small"></pre>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="./app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Enhanced JavaScript for modern interactions
+        document.addEventListener('DOMContentLoaded', function() {
+            // Page loader
+            setTimeout(() => {
+                document.getElementById('pageLoader').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('pageLoader').style.display = 'none';
+                    document.getElementById('mainContainer').style.opacity = '1';
+                }, 300);
+            }, 1500);
+
+            // Tab switching with smooth transitions
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabPanels = document.querySelectorAll('.tab-panel');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetTab = button.dataset.tab;
+                    
+                    // Update active states
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabPanels.forEach(panel => panel.classList.remove('active'));
+                    
+                    button.classList.add('active');
+                    document.getElementById(`${targetTab}-panel`).classList.add('active');
+                });
+            });
+
+            // Database selector - removed duplicate (handled in app.js)
+
+            // Modern button ripple effect
+            const modernButtons = document.querySelectorAll('.btn-modern');
+            modernButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    const ripple = this.querySelector('.btn-ripple');
+                    const rect = this.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    ripple.classList.add('animate');
+                    
+                    setTimeout(() => {
+                        ripple.classList.remove('animate');
+                    }, 600);
+                });
+            });
+
+            // Theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-theme');
+                const icon = themeToggle.querySelector('i');
+                icon.classList.toggle('bi-moon-fill');
+                icon.classList.toggle('bi-sun-fill');
+            });
+
+            // Range slider updates
+            const rangeSliders = document.querySelectorAll('.range-slider');
+            rangeSliders.forEach(slider => {
+                const valueDisplay = slider.nextElementSibling;
+                slider.addEventListener('input', () => {
+                    valueDisplay.textContent = slider.value;
+                });
+            });
+
+            // Password toggle functionality
+            const passwordToggle = document.querySelector('.password-toggle');
+            if (passwordToggle) {
+                passwordToggle.addEventListener('click', () => {
+                    const passwordInput = document.getElementById('db-password');
+                    const icon = passwordToggle.querySelector('i');
+                    
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        icon.classList.remove('bi-eye');
+                        icon.classList.add('bi-eye-slash');
+                    } else {
+                        passwordInput.type = 'password';
+                        icon.classList.remove('bi-eye-slash');
+                        icon.classList.add('bi-eye');
+                    }
+                });
+            }
+
+            // Toast notification system
+            window.showToast = function(message, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `toast-notification toast-${type}`;
+                toast.innerHTML = `
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle'}"></i>
+                    <span>${message}</span>
+                    <button class="toast-close"><i class="bi bi-x"></i></button>
+                `;
+                
+                document.getElementById('toastContainer').appendChild(toast);
+                
+                setTimeout(() => toast.classList.add('show'), 100);
+                
+                toast.querySelector('.toast-close').addEventListener('click', () => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                });
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }, 5000);
+            };
+        });
+    </script>
+    <script src="app.js"></script>
+    <script>
+        // Initialize the app after everything is loaded
+        window.addEventListener('load', () => {
+            // Small delay to ensure all resources are fully loaded
+            setTimeout(() => {
+                if (typeof TallyDatabaseApp !== 'undefined') {
+                    new TallyDatabaseApp();
+                } else {
+                    console.error('TallyDatabaseApp class not found');
+                }
+            }, 100);
+        });
+    </script>
 </body>
-</html> 
+</html>
