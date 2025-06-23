@@ -43,31 +43,31 @@
     ],
     "extraResources": [
       {
-        "from": "../config.json",
+        "from": "./config.json",
         "to": "config.json"
       },
       {
-        "from": "../tally-export-config.yaml",
+        "from": "./tally-export-config.yaml",
         "to": "tally-export-config.yaml"
       },
       {
-        "from": "../tally-export-config-incremental.yaml",
+        "from": "./tally-export-config-incremental.yaml",
         "to": "tally-export-config-incremental.yaml"
       },
       {
-        "from": "../database-structure.sql",
+        "from": "./database-structure.sql",
         "to": "database-structure.sql"
       },
       {
-        "from": "../database-structure-incremental.sql",
+        "from": "./database-structure-incremental.sql",
         "to": "database-structure-incremental.sql"
       },
       {
-        "from": "../platform",
+        "from": "./platform",
         "to": "platform"
       },
       {
-        "from": "../reports",
+        "from": "./reports",
         "to": "reports"
       }
     ],
