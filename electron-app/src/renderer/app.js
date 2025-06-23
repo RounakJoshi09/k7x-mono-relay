@@ -584,16 +584,32 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
         this.showConfigurationSummary();
       }
 
-      // Ctrl+V for validate configuration
+      // Ctrl+V for validate configuration (only when not in input fields)
       if (event.ctrlKey && event.key === "v") {
-        event.preventDefault();
-        this.validateCurrentConfiguration();
+        const activeElement = document.activeElement;
+        const isInputField =
+          activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.contentEditable === "true";
+
+        if (!isInputField) {
+          event.preventDefault();
+          this.validateCurrentConfiguration();
+        }
       }
 
-      // Ctrl+R for restore configuration from backup
+      // Ctrl+R for restore configuration from backup (only when not in input fields)
       if (event.ctrlKey && event.key === "r") {
-        event.preventDefault();
-        this.restoreConfigurationFromBackup();
+        const activeElement = document.activeElement;
+        const isInputField =
+          activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.contentEditable === "true";
+
+        if (!isInputField) {
+          event.preventDefault();
+          this.restoreConfigurationFromBackup();
+        }
       }
     });
   }
