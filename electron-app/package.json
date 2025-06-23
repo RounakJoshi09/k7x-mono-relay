@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run build:core && tsc && npm run copy-files",
     "build:core": "cd core && tsc",
-    "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/",
+    "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/ && copyfiles -u 2 core/dist/**/* dist/core/dist/",
     "build:watch": "npm run build:core && tsc --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",

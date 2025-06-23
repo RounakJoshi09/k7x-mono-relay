@@ -39,6 +39,7 @@ interface TallyDatabaseAPI {
   getAppVersion: () => Promise<string>;
   getUserDataPath: () => Promise<string>;
   showMessageBox: (options: any) => Promise<any>;
+  showItemInFolder: (filePath: string) => Promise<void>;
 
   // Store operations
   storeGet: (key: string) => Promise<any>;
@@ -48,6 +49,10 @@ interface TallyDatabaseAPI {
   // Log operations
   getLogs: () => Promise<string>;
   clearLogs: () => Promise<void>;
+  exportLogs: (options?: {
+    format?: string;
+    date?: string;
+  }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
 
   // Startup management
   enableStartup: () => Promise<{ success: boolean }>;
@@ -103,6 +108,8 @@ const api: TallyDatabaseAPI = {
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   getUserDataPath: () => ipcRenderer.invoke("get-user-data-path"),
   showMessageBox: (options) => ipcRenderer.invoke("show-message-box", options),
+  showItemInFolder: (filePath) =>
+    ipcRenderer.invoke("show-item-in-folder", filePath),
 
   // Store operations
   storeGet: (key) => ipcRenderer.invoke("store-get", key),
@@ -112,6 +119,7 @@ const api: TallyDatabaseAPI = {
   // Log operations
   getLogs: () => ipcRenderer.invoke("get-logs"),
   clearLogs: () => ipcRenderer.invoke("clear-logs"),
+  exportLogs: (options) => ipcRenderer.invoke("export-logs", options),
 
   // Startup management
   enableStartup: () => ipcRenderer.invoke("enable-startup"),

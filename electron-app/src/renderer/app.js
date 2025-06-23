@@ -502,6 +502,15 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
       clearLogsButton.addEventListener("click", this.clearLogs.bind(this));
     }
 
+    const exportLogsButton = document.getElementById("export-logs");
+    if (
+      exportLogsButton &&
+      !exportLogsButton.hasAttribute("data-listener-attached")
+    ) {
+      exportLogsButton.setAttribute("data-listener-attached", "true");
+      exportLogsButton.addEventListener("click", this.exportLogs.bind(this));
+    }
+
     // Other actions - handle both visible and hidden buttons
     const viewDbStructureButtons = document.querySelectorAll(
       "#view-database-structure, #view-database-structure-hidden"
@@ -1348,6 +1357,86 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
     } catch (error) {
       this.showToast("Error", "Failed to clear logs", "error");
     }
+  }
+
+  async exportLogs() {
+    try {
+      // Show loading state
+      this.showToast("Info", "Preparing log export...", "info");
+
+      // Create export options dialog
+      const exportFormat = await this.showExportOptionsDialog();
+      if (!exportFormat) {
+        return; // User canceled
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      const result = await window.tallyAPI.exportLogs({
+        format: exportFormat,
+        date: today,
+      });
+
+      if (result.success) {
+        this.showToast(
+          "Success",
+          `Logs exported successfully to: ${result.filePath}`,
+          "success"
+        );
+
+        // Optionally open the export location
+        const openLocation = await window.tallyAPI.showMessageBox({
+          type: "question",
+          title: "Export Complete",
+          message:
+            "Logs have been exported successfully. Would you like to open the file location?",
+          buttons: ["Yes", "No"],
+          defaultId: 0,
+        });
+
+        if (openLocation.response === 0) {
+          // Open file location using the operating system's default file manager
+          try {
+            await window.tallyAPI.showItemInFolder(result.filePath);
+          } catch (error) {
+            console.log("Could not open file location:", error);
+            // Fallback: just show the path in a message
+            this.showToast("Info", `File saved to: ${result.filePath}`, "info");
+          }
+        }
+      } else {
+        this.showToast(
+          "Error",
+          result.error || "Failed to export logs",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Export logs error:", error);
+      this.showToast("Error", "Failed to export logs", "error");
+    }
+  }
+
+  async showExportOptionsDialog() {
+    return new Promise((resolve) => {
+      // Create a simple dialog using existing UI elements
+      const result = window.tallyAPI
+        .showMessageBox({
+          type: "question",
+          title: "Export Logs",
+          message: "Choose the export format for your logs:",
+          detail:
+            "• JSON: Structured data with all details\n• CSV: Spreadsheet format for analysis\n• TXT: Human-readable format",
+          buttons: ["JSON", "CSV", "TXT", "Cancel"],
+          defaultId: 0,
+        })
+        .then((response) => {
+          const formats = ["json", "csv", "txt", null];
+          resolve(formats[response.response]);
+        })
+        .catch(() => {
+          resolve(null);
+        });
+    });
   }
 
   async viewDatabaseStructure() {

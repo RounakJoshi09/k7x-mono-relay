@@ -394,6 +394,9 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("show-message-box", (_, options) =>
       dialog.showMessageBox(this.mainWindow!, options)
     );
+    ipcMain.handle("show-item-in-folder", (_, filePath) =>
+      shell.openPath(path.dirname(filePath))
+    );
 
     // Store operations
     ipcMain.handle("store-get", (_, key) => this.store.get(key));
@@ -403,6 +406,9 @@ class TallyDatabaseLoaderApp {
     // Log operations
     ipcMain.handle("get-logs", () => this.tallyCore.getLogs());
     ipcMain.handle("clear-logs", () => this.tallyCore.clearLogs());
+    ipcMain.handle("export-logs", async (_, options) =>
+      this.exportLogs(options)
+    );
 
     // Startup management
     ipcMain.handle("enable-startup", async () => {
@@ -534,6 +540,108 @@ class TallyDatabaseLoaderApp {
       message: "Tally Database Loader",
       detail: `Version: ${app.getVersion()}\n\nA desktop application for synchronizing Tally Prime data with various databases.\n\n© 2024 Tally Database Loader Team`,
     });
+  }
+
+  private async exportLogs(
+    options: { format?: string; date?: string } = {}
+  ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    try {
+      // Import the local log viewer with dynamic import to handle ES modules
+      const { pathToFileURL } = await import("url");
+
+      // Debug information
+      console.log("Export logs debug info:", {
+        isDev: this.isDev,
+        __dirname,
+        processCwd: process.cwd(),
+        appPath: app.getAppPath(),
+        exePath: app.getPath("exe"),
+        exeDir: path.dirname(app.getPath("exe")),
+      });
+
+      // Always look for the compiled module in the dist directory
+      // Since we're running from dist/main.js, core should be at dist/core/dist/
+      const viewerPath = path.join(
+        __dirname,
+        "core",
+        "dist",
+        "local-log-viewer.mjs"
+      );
+
+      console.log("Checking viewer path:", viewerPath);
+      console.log("File exists:", fs.existsSync(viewerPath));
+
+      if (!fs.existsSync(viewerPath)) {
+        throw new Error(`Local log viewer module not found at: ${viewerPath}`);
+      }
+
+      const viewerURL = pathToFileURL(viewerPath).href;
+      console.log("Importing from URL:", viewerURL);
+
+      // Use eval to bypass TypeScript/Electron's CommonJS restriction
+      // This is a workaround for importing ES modules from CommonJS in Electron
+      const logViewerModule = await eval("import(viewerURL)");
+      console.log("Available exports:", Object.keys(logViewerModule));
+
+      const { localLogViewer } = logViewerModule;
+
+      if (!localLogViewer) {
+        throw new Error("localLogViewer export not found in module");
+      }
+
+      const format = options.format || "json";
+      const date = options.date || new Date().toISOString().split("T")[0];
+
+      // Use dialog to let user choose export location
+      const result = await dialog.showSaveDialog(this.mainWindow!, {
+        title: "Export Logs",
+        defaultPath: `tally-logs-${date}.${format}`,
+        filters: [
+          { name: "JSON Files", extensions: ["json"] },
+          { name: "CSV Files", extensions: ["csv"] },
+          { name: "Text Files", extensions: ["txt"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: "Export canceled by user" };
+      }
+
+      // Determine format from file extension if not specified
+      const extension = path.extname(result.filePath).toLowerCase();
+      let exportFormat = format;
+      if (extension === ".csv") exportFormat = "csv";
+      else if (extension === ".txt") exportFormat = "txt";
+      else if (extension === ".json") exportFormat = "json";
+
+      // Export logs using our enhanced logging system
+      const exportedFilePath = localLogViewer.exportLogs(
+        date,
+        exportFormat as "json" | "csv" | "txt"
+      );
+
+      // Copy the exported file to the user-selected location
+      if (fs.existsSync(exportedFilePath)) {
+        fs.copyFileSync(exportedFilePath, result.filePath);
+
+        return {
+          success: true,
+          filePath: result.filePath,
+        };
+      } else {
+        return {
+          success: false,
+          error: "No logs found for the specified date",
+        };
+      }
+    } catch (error: any) {
+      console.error("Export logs error:", error);
+      return {
+        success: false,
+        error: error?.message || "Failed to export logs",
+      };
+    }
   }
 
   // Startup Management Methods

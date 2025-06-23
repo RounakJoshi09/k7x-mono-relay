@@ -12,3 +12,4 @@ adls-config.json
 build
 dist
 core/dist
+logs/
