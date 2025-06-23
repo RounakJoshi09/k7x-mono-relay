@@ -13,6 +13,7 @@ import * as path from "path";
 import * as fs from "fs";
 import Store from "electron-store";
 import { TallyDatabaseCore } from "./core-bridge";
+// Enhanced error handling will be initialized through the core system
 
 // For Windows startup functionality
 import { exec } from "child_process";
@@ -31,9 +32,39 @@ class TallyDatabaseLoaderApp {
     this.store = new Store();
     this.tallyCore = new TallyDatabaseCore();
 
+    // Setup enhanced error handling for main process
+    this.setupErrorHandling();
+
     this.setupApp();
     this.setupIPC();
     this.setupAutoUpdater();
+  }
+
+  private setupErrorHandling(): void {
+    // Global error handling for the main process
+    process.on("uncaughtException", (error: Error) => {
+      console.error("Uncaught Exception in Main Process:", error);
+      dialog.showErrorBox(
+        "Application Error",
+        `An unexpected error occurred: ${error.message}\n\nThe application will continue running, but you may want to restart it.`
+      );
+    });
+
+    process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+      console.error("Unhandled Promise Rejection in Main Process:", reason);
+      dialog.showErrorBox(
+        "Application Error",
+        `An unexpected error occurred: ${reason}\n\nThe application will continue running, but you may want to restart it.`
+      );
+    });
+
+    // Log application startup
+    console.log("Tally Database Loader starting...", {
+      isDev: this.isDev,
+      platform: process.platform,
+      version: app.getVersion(),
+      nodeVersion: process.version,
+    });
   }
 
   private setupApp() {

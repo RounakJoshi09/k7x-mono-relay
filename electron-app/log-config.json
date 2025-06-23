@@ -1,0 +1,72 @@
+{
+  "enabled": false,
+  "method": "webhook",
+  "endpoint": "https://your-log-server.com/api/logs",
+  "apiKey": "your-api-key-here",
+  "batchSize": 50,
+  "retryAttempts": 3,
+  "compressLogs": true,
+  "shipImmediatelyFor": ["ERROR", "CRITICAL"],
+  "webhook": {
+    "endpoint": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+    "method": "POST",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer your-token"
+    }
+  },
+  "email": {
+    "smtpHost": "smtp.gmail.com",
+    "smtpPort": 587,
+    "secure": false,
+    "username": "your-email@gmail.com",
+    "password": "your-app-password",
+    "fromEmail": "your-email@gmail.com",
+    "toEmails": ["admin@yourcompany.com", "support@yourcompany.com"]
+  },
+  "fileUpload": {
+    "endpoint": "https://your-server.com/upload",
+    "method": "POST",
+    "authHeader": "Bearer your-upload-token"
+  },
+  "syslog": {
+    "host": "logs.yourcompany.com",
+    "port": 514,
+    "protocol": "udp",
+    "facility": "local0"
+  },
+  "cloudServices": {
+    "awsCloudWatch": {
+      "region": "us-east-1",
+      "logGroupName": "/tally-database-loader/errors",
+      "accessKeyId": "your-aws-access-key",
+      "secretAccessKey": "your-aws-secret-key"
+    },
+    "azureApplicationInsights": {
+      "instrumentationKey": "your-app-insights-key"
+    },
+    "googleCloudLogging": {
+      "projectId": "your-gcp-project-id",
+      "keyFilename": "path/to/service-account.json"
+    }
+  },
+  "filters": {
+    "minimumLevel": "WARN",
+    "excludePatterns": [
+      "Connection timeout",
+      "Network temporarily unavailable"
+    ],
+    "includeOnlyFunctions": [],
+    "excludeFunctions": ["debug.*", "test.*"]
+  },
+  "retention": {
+    "localLogDays": 30,
+    "remoteLogDays": 90,
+    "maxLogSizeMB": 100
+  },
+  "privacy": {
+    "excludeUserData": true,
+    "hashSensitiveData": true,
+    "excludeFields": ["password", "token", "apiKey"]
+  }
+}

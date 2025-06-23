@@ -36,7 +36,10 @@ class _tally {
         frequency: 0,
         sync: "full",
       };
-      logger.logError("tally()", err);
+      logger.logError("tally.constructor", err, {
+        configPath: configPath || "./config.json",
+        fallbackConfigUsed: true,
+      });
       throw err;
     }
   }

@@ -407,9 +407,12 @@ class _database {
         }
         resolve(rowCount);
       } catch (err: any) {
-        // if (typeof err == 'object')
-        //     err['targetQuery'] = sqlQuery;
-        logger.logError(`database.bulkLoad(${targetTable})`, err);
+        logger.logError(`database.bulkLoad(${targetTable})`, err, {
+          csvFile,
+          targetTable,
+          fieldTypeCount: lstFieldType.length,
+          technology: this.config.technology,
+        });
         reject(err);
       }
     });
