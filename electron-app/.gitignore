@@ -11,3 +11,4 @@ bigquery-credentials.json
 adls-config.json
 build
 dist
+core/dist
