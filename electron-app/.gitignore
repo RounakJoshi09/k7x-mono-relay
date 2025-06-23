@@ -10,3 +10,5 @@ error-log.txt
 *.exe
 bigquery-credentials.json
 adls-config.json
+build
+dist
