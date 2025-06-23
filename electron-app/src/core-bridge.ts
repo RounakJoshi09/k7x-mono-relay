@@ -71,8 +71,8 @@ export class TallyDatabaseCore extends EventEmitter {
 
   private getConfigPath(): string {
     const resourcesPath = app.isPackaged
-      ? path.join(process.resourcesPath, "config.json")
-      : path.join(__dirname, "../config.json");
+      ? path.join(process.resourcesPath, "config-default.json")
+      : path.join(__dirname, "../config-default.json");
 
     const userDataPath = path.join(app.getPath("userData"), "config.json");
 
@@ -86,30 +86,55 @@ export class TallyDatabaseCore extends EventEmitter {
 
   private ensureConfigExists(): void {
     if (!fs.existsSync(this.configPath)) {
-      const defaultConfig: AppConfig = {
-        database: {
-          technology: "mysql",
-          server: "127.0.0.1",
-          port: 3306,
-          ssl: false,
-          schema: "tally",
-          username: "root",
-          password: "",
-          loadmethod: "insert",
-        },
-        tally: {
-          definition: "tally-export-config.yaml",
-          server: "localhost",
-          port: 9000,
-          company: "",
-          fromdate: "auto",
-          todate: "auto",
-          frequency: 0,
-          sync: "full",
-        },
-      };
+      // Try to load default config from resources
+      const resourcesPath = app.isPackaged
+        ? path.join(process.resourcesPath, "config-default.json")
+        : path.join(__dirname, "../config-default.json");
 
-      fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+      if (fs.existsSync(resourcesPath)) {
+        // Copy the default config from resources
+        fs.copyFileSync(resourcesPath, this.configPath);
+      } else {
+        // Fallback to hardcoded default if resources file doesn't exist
+        const defaultConfig: AppConfig = {
+          database: {
+            technology: "mysql",
+            server: "localhost",
+            port: 3306,
+            ssl: false,
+            schema: "tally",
+            username: "root",
+            password: "",
+            loadmethod: "insert",
+            ssh_tunnel: {
+              enabled: false,
+              host: "",
+              port: 22,
+              username: "",
+              password: "",
+              privateKey: "",
+              localPort: 3307,
+              remoteHost: "localhost",
+              remotePort: 3306,
+            },
+          },
+          tally: {
+            definition: "tally-export-config.yaml",
+            server: "localhost",
+            port: 9000,
+            company: "",
+            fromdate: "auto",
+            todate: "auto",
+            frequency: 0,
+            sync: "full",
+          },
+        };
+
+        fs.writeFileSync(
+          this.configPath,
+          JSON.stringify(defaultConfig, null, 2)
+        );
+      }
     }
   }
 
@@ -191,6 +216,27 @@ export class TallyDatabaseCore extends EventEmitter {
     } catch (error) {
       this.emit("log-message", `Error saving configuration: ${error}`);
       throw new Error(`Failed to save configuration: ${error}`);
+    }
+  }
+
+  public resetToDefaults(): void {
+    try {
+      // Create backup before resetting
+      if (fs.existsSync(this.configPath)) {
+        const backupPath = this.configPath + `.backup.${Date.now()}`;
+        fs.copyFileSync(this.configPath, backupPath);
+        this.emit(
+          "log-message",
+          `Current configuration backed up to: ${backupPath}`
+        );
+      }
+
+      // Reset to default configuration
+      this.ensureConfigExists();
+      this.emit("log-message", "Configuration reset to defaults successfully");
+    } catch (error) {
+      this.emit("log-message", `Error resetting configuration: ${error}`);
+      throw new Error(`Failed to reset configuration: ${error}`);
     }
   }
 

@@ -175,6 +175,11 @@ class TallyDatabaseLoaderApp {
           },
           { type: "separator" },
           {
+            label: "Reset to Defaults",
+            click: () => this.handleResetConfiguration(),
+          },
+          { type: "separator" },
+          {
             label: "Exit",
             accelerator: process.platform === "darwin" ? "Cmd+Q" : "Ctrl+Q",
             click: () => app.quit(),
@@ -284,6 +289,7 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("restore-config", (_, backupPath) =>
       this.tallyCore.restoreConfigurationFromBackup(backupPath)
     );
+    ipcMain.handle("reset-config", () => this.tallyCore.resetToDefaults());
 
     // Database operations
     ipcMain.handle("test-database-connection", (_, config) =>
@@ -452,6 +458,10 @@ class TallyDatabaseLoaderApp {
 
   private handleExportConfiguration() {
     this.mainWindow?.webContents.send("menu-export-configuration");
+  }
+
+  private handleResetConfiguration() {
+    this.mainWindow?.webContents.send("menu-reset-configuration");
   }
 
   private handleStartSync() {

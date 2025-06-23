@@ -9,6 +9,7 @@ interface TallyDatabaseAPI {
     config: any
   ) => Promise<{ isValid: boolean; errors: string[] }>;
   restoreConfig: (backupPath: string) => Promise<boolean>;
+  resetConfig: () => Promise<void>;
 
   // Database operations
   testDatabaseConnection: (
@@ -72,6 +73,7 @@ const api: TallyDatabaseAPI = {
   validateConfig: (config) => ipcRenderer.invoke("validate-config", config),
   restoreConfig: (backupPath) =>
     ipcRenderer.invoke("restore-config", backupPath),
+  resetConfig: () => ipcRenderer.invoke("reset-config"),
 
   // Database operations
   testDatabaseConnection: (config) =>
@@ -137,6 +139,7 @@ const api: TallyDatabaseAPI = {
       "menu-save-configuration",
       "menu-import-configuration",
       "menu-export-configuration",
+      "menu-reset-configuration",
       "menu-start-sync",
       "menu-stop-sync",
       "menu-test-database",

@@ -43,8 +43,8 @@
     ],
     "extraResources": [
       {
-        "from": "./config.json",
-        "to": "config.json"
+        "from": "./config-default.json",
+        "to": "config-default.json"
       },
       {
         "from": "./tally-export-config.yaml",
