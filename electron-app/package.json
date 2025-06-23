@@ -16,8 +16,11 @@
     "pack": "npm run build && electron-builder --dir --publish=never",
     "dist": "npm run build && electron-builder --publish=never",
     "dist:win": "npm run build && electron-builder --win --publish=never",
+    "dist:win-msi": "npm run build && electron-builder --win msi --publish=never",
+    "dist:win-nsis": "npm run build && electron-builder --win nsis --publish=never",
     "dist:all": "npm run build && electron-builder --win --mac --linux --publish=never",
-    "clean": "rimraf dist build"
+    "clean": "rimraf dist build",
+    "postinstall": "electron-builder install-app-deps"
   },
   "build": {
     "appId": "com.tallydatabaseloader.app",
@@ -35,7 +38,8 @@
       "!node_modules/**/test/**/*",
       "!node_modules/**/*.md",
       "!node_modules/**/LICENSE*",
-      "!node_modules/**/README*"
+      "!node_modules/**/README*",
+      "!node_modules/**/.bin/**/*"
     ],
     "extraResources": [
       {
@@ -70,6 +74,18 @@
     "win": {
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
           "target": "portable",
           "arch": [
             "x64"
@@ -81,7 +97,32 @@
       "sign": false,
       "verifyUpdateCodeSignature": false,
       "forceCodeSigning": false,
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "artifactName": "TallyDatabaseLoader-${version}-setup.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "src/assets/icon.ico",
+      "uninstallerIcon": "src/assets/icon.ico",
+      "installerHeaderIcon": "src/assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tally Database Loader",
+      "perMachine": true,
+      "warningsAsErrors": false,
+      "include": "installer-script.nsh"
+    },
+    "msi": {
+      "artifactName": "TallyDatabaseLoader-${version}-setup.msi",
+      "oneClick": false,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tally Database Loader",
+      "warningsAsErrors": false
     },
     "portable": {
       "artifactName": "TallyDatabaseLoader-${version}-portable.exe"
@@ -93,17 +134,16 @@
     "beforeBuild": null,
     "beforePack": null,
     "afterPack": null,
-    "artifactBuildTimeout": 0,
     "buildDependenciesFromSource": false,
     "buildVersion": "1.0.0",
-    "compression": "normal",
+    "compression": "maximum",
     "copyright": "Copyright © 2024",
     "icon": "src/assets/icon.png",
     "extraMetadata": {
       "main": "dist/main.js"
     },
     "generateUpdatesFilesForAllChannels": false,
-    "includeSubNodeModules": false,
+    "includeSubNodeModules": true,
     "nodeGypRebuild": false,
     "npmRebuild": false,
     "removePackageScripts": false,
