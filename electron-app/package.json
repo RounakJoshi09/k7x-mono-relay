@@ -78,27 +78,9 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ],
-      "icon": "src/assets/icon.png",
-      "publish": null,
-      "sign": false,
-      "verifyUpdateCodeSignature": false,
-      "forceCodeSigning": false,
-      "signAndEditExecutable": false,
-      "requestedExecutionLevel": "requireAdministrator"
+      "icon": "src/assets/icon.png"
     },
     "nsis": {
       "artifactName": "TallyDatabaseLoader-${version}-setup.exe",
