@@ -250,16 +250,16 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
       this.config = this.getConfigFromForm();
 
       // Validate configuration
-      const validation = await window.tallyAPI.validateConfig(this.config);
-      if (!validation.isValid) {
-        const errorMessage =
-          validation.errors.length > 1
-            ? `Multiple validation errors:\n${validation.errors.join("\n")}`
-            : validation.errors[0];
+      // const validation = await window.tallyAPI.validateConfig(this.config);
+      // if (!validation.isValid) {
+      //   const errorMessage =
+      //     validation.errors.length > 1
+      //       ? `Multiple validation errors:\n${validation.errors.join("\n")}`
+      //       : validation.errors[0];
 
-        this.showToast("Validation Error", errorMessage, "error");
-        return false;
-      }
+      //   this.showToast("Validation Error", errorMessage, "error");
+      //   return false;
+      // }
 
       await window.tallyAPI.saveConfig(this.config);
       this.showToast("Success", "Configuration saved successfully", "success");
