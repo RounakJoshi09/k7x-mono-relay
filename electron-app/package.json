@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run build:core && tsc && npm run copy-files",
     "build:core": "cd core && tsc",
-    "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/ && copyfiles -u 2 core/dist/**/* dist/core/dist/",
+    "copy-files": "copyfiles -u 1 src/renderer/**/* dist/ && copyfiles -u 1 src/assets/**/* dist/ && copyfiles -u 2 core/dist/**/* dist/core/dist/ && copyfiles -u 1 node_modules/**/* dist/node_modules/ && copyfiles tally-export-config*.yaml dist/",
     "build:watch": "npm run build:core && tsc --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
@@ -23,6 +23,8 @@
     "postinstall": "electron-builder install-app-deps",
     "test:core": "node test-core-modules.js",
     "test:simple": "node test-simple-core.js",
+    "test:deps": "node test-dependencies.js",
+    "test:packaged": "node test-packaged-deps.js",
     "verify": "node verify-build.js",
     "check-installed": "node check-installed-app.js",
     "prepack": "npm run build:core",
@@ -75,6 +77,10 @@
       {
         "from": "./core/dist",
         "to": "core"
+      },
+      {
+        "from": "./node_modules",
+        "to": "node_modules"
       },
       {
         "from": "./platform",

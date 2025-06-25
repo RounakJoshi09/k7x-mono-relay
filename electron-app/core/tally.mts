@@ -92,15 +92,16 @@ class _tally {
 
         //Load YAML export definition file
         let pathTallyExportDefinition = this.config.definition;
-        if (fs.existsSync(`./${pathTallyExportDefinition}`)) {
+        if (fs.existsSync(pathTallyExportDefinition)) {
           let objYAML: any = yaml.load(
-            fs.readFileSync(`./${pathTallyExportDefinition}`, "utf-8")
+            fs.readFileSync(pathTallyExportDefinition, "utf-8")
           );
           this.lstTableMaster = objYAML["master"];
           this.lstTableTransaction = objYAML["transaction"];
         } else {
           logger.logMessage(
-            "Tally export definition file specified does not exists or is invalid"
+            "Tally export definition file specified does not exists or is invalid: %s",
+            pathTallyExportDefinition
           );
           resolve();
           return;

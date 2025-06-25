@@ -503,6 +503,10 @@ export class TallyDatabaseCore extends EventEmitter {
         env: {
           ...process.env,
           NODE_ENV: app.isPackaged ? "production" : "development",
+          // Set NODE_PATH to include the node_modules in resources for packaged app
+          NODE_PATH: app.isPackaged
+            ? path.join(process.resourcesPath, "node_modules")
+            : path.join(process.cwd(), "node_modules"),
         },
       });
 
@@ -662,8 +666,11 @@ export class TallyDatabaseCore extends EventEmitter {
     args.push("--database-password", config.database.password);
     args.push("--database-loadmethod", config.database.loadmethod);
 
-    // Tally args
-    args.push("--tally-definition", config.tally.definition);
+    // Tally args - use full path for definition file
+    const definitionPath = app.isPackaged
+      ? path.join(process.resourcesPath, config.tally.definition)
+      : path.join(process.cwd(), config.tally.definition);
+    args.push("--tally-definition", definitionPath);
     args.push("--tally-server", config.tally.server);
     args.push("--tally-port", config.tally.port.toString());
     args.push("--tally-company", config.tally.company);

@@ -70,17 +70,17 @@ if (fs.existsSync(resourcesPath)) {
   });
 
   // Check core directory specifically
-  const corePath = path.join(resourcesPath, "core");
-  console.log(`\nChecking core directory: ${corePath}`);
+  const resourcesCorePath = path.join(resourcesPath, "core");
+  console.log(`\nChecking core directory: ${resourcesCorePath}`);
 
-  if (fs.existsSync(corePath)) {
+  if (fs.existsSync(resourcesCorePath)) {
     console.log("✅ Core directory exists");
 
     // List all files in core
-    const coreFiles = fs.readdirSync(corePath);
+    const coreFiles = fs.readdirSync(resourcesCorePath);
     console.log("Core files:");
     coreFiles.forEach((file) => {
-      const filePath = path.join(corePath, file);
+      const filePath = path.join(resourcesCorePath, file);
       const stats = fs.statSync(filePath);
       if (stats.isDirectory()) {
         console.log(`  📁 ${file}/`);
@@ -107,12 +107,63 @@ if (fs.existsSync(resourcesPath)) {
     ];
     console.log("\nChecking required .mjs files:");
     for (const file of requiredMjsFiles) {
-      const filePath = path.join(corePath, file);
+      const filePath = path.join(resourcesCorePath, file);
       if (fs.existsSync(filePath)) {
         const stats = fs.statSync(filePath);
         console.log(`✅ ${file} (${(stats.size / 1024).toFixed(1)} KB)`);
       } else {
         console.log(`❌ ${file} - MISSING`);
+      }
+    }
+
+    // Check core modules
+    console.log("\n🔍 Checking core modules...");
+    const installedCoreFiles = [
+      "index.mjs",
+      "database.mjs",
+      "tally.mjs",
+      "logger.mjs",
+      "error-handler.mjs",
+      "log-manager.mjs",
+      "local-log-aggregator.mjs",
+      "local-log-viewer.mjs",
+      "server.mjs",
+      "ssh-tunnel.mjs",
+      "utility.mjs",
+      "definition.mjs",
+    ];
+
+    const missingFiles = [];
+
+    for (const file of installedCoreFiles) {
+      const filePath = path.join(resourcesCorePath, file);
+      if (fs.existsSync(filePath)) {
+        console.log(`✅ ${file}`);
+      } else {
+        console.log(`❌ ${file} - MISSING`);
+        missingFiles.push(filePath);
+      }
+    }
+
+    // Check dependencies
+    console.log("\n🔍 Checking dependencies...");
+    const keyDependencies = [
+      "mysql2",
+      "pg",
+      "tedious",
+      "@google-cloud/bigquery",
+      "ssh2",
+      "ws",
+      "js-yaml",
+    ];
+
+    for (const dep of keyDependencies) {
+      const depPath = path.join(resourcesPath, "node_modules", dep);
+      if (fs.existsSync(depPath)) {
+        console.log(`✅ ${dep}`);
+      } else {
+        console.log(`❌ ${dep} - MISSING`);
+        missingFiles.push(depPath);
       }
     }
   } else {

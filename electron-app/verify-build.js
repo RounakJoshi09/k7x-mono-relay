@@ -11,7 +11,7 @@ const fs = require("fs");
 console.log("=== Build Verification ===");
 console.log(`Working directory: ${process.cwd()}`);
 
-let allGood = true;
+let missingFiles = [];
 
 // Check if core/dist exists and has the required files
 const coreDistPath = path.join(process.cwd(), "core", "dist");
@@ -20,7 +20,7 @@ console.log(`\nChecking core/dist directory: ${coreDistPath}`);
 if (!fs.existsSync(coreDistPath)) {
   console.log("❌ core/dist directory not found!");
   console.log('Run "npm run build:core" to build the core modules');
-  allGood = false;
+  missingFiles.push(coreDistPath);
 } else {
   console.log("✅ core/dist directory exists");
 
@@ -45,7 +45,56 @@ if (!fs.existsSync(coreDistPath)) {
       console.log(`✅ ${file} (${(stats.size / 1024).toFixed(1)} KB)`);
     } else {
       console.log(`❌ ${file} - MISSING`);
-      allGood = false;
+      missingFiles.push(filePath);
+    }
+  }
+
+  // Check core modules
+  console.log("\n🔍 Checking core modules...");
+  const coreFiles = [
+    "index.mjs",
+    "database.mjs",
+    "tally.mjs",
+    "logger.mjs",
+    "error-handler.mjs",
+    "log-manager.mjs",
+    "local-log-aggregator.mjs",
+    "local-log-viewer.mjs",
+    "server.mjs",
+    "ssh-tunnel.mjs",
+    "utility.mjs",
+    "definition.mjs",
+  ];
+
+  for (const file of coreFiles) {
+    const filePath = path.join(coreDistPath, file);
+    if (fs.existsSync(filePath)) {
+      console.log(`✅ ${file}`);
+    } else {
+      console.log(`❌ ${file} - MISSING`);
+      missingFiles.push(filePath);
+    }
+  }
+
+  // Check dependencies
+  console.log("\n🔍 Checking dependencies...");
+  const keyDependencies = [
+    "mysql2",
+    "pg",
+    "tedious",
+    "@google-cloud/bigquery",
+    "ssh2",
+    "ws",
+    "js-yaml",
+  ];
+
+  for (const dep of keyDependencies) {
+    const depPath = path.join(process.cwd(), "node_modules", dep);
+    if (fs.existsSync(depPath)) {
+      console.log(`✅ ${dep}`);
+    } else {
+      console.log(`❌ ${dep} - MISSING`);
+      missingFiles.push(depPath);
     }
   }
 }
@@ -57,7 +106,7 @@ console.log(`\nChecking dist directory: ${distPath}`);
 if (!fs.existsSync(distPath)) {
   console.log("❌ dist directory not found!");
   console.log('Run "npm run build" to build the application');
-  allGood = false;
+  missingFiles.push(distPath);
 } else {
   console.log("✅ dist directory exists");
 
@@ -72,7 +121,7 @@ if (!fs.existsSync(distPath)) {
       console.log(`✅ ${file} (${(stats.size / 1024).toFixed(1)} KB)`);
     } else {
       console.log(`❌ ${file} - MISSING`);
-      allGood = false;
+      missingFiles.push(filePath);
     }
   }
 
@@ -83,7 +132,7 @@ if (!fs.existsSync(distPath)) {
   if (!fs.existsSync(distCorePath)) {
     console.log("❌ dist/core/dist directory not found!");
     console.log('Run "npm run copy-files" to copy core modules');
-    allGood = false;
+    missingFiles.push(distCorePath);
   } else {
     console.log("✅ dist/core/dist directory exists");
 
@@ -96,7 +145,7 @@ if (!fs.existsSync(distPath)) {
         console.log(`✅ ${file} (${(stats.size / 1024).toFixed(1)} KB)`);
       } else {
         console.log(`❌ ${file} - MISSING`);
-        allGood = false;
+        missingFiles.push(filePath);
       }
     }
   }
@@ -119,13 +168,13 @@ for (const file of configFiles) {
     console.log(`✅ ${file} (${(stats.size / 1024).toFixed(1)} KB)`);
   } else {
     console.log(`❌ ${file} - MISSING`);
-    allGood = false;
+    missingFiles.push(filePath);
   }
 }
 
 // Summary
 console.log("\n=== Build Verification Summary ===");
-if (allGood) {
+if (missingFiles.length === 0) {
   console.log("✅ All checks passed! Ready to build installer.");
   console.log("\nYou can now run:");
   console.log("  npm run dist:win-msi    (for MSI installer)");
