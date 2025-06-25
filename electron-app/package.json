@@ -20,7 +20,17 @@
     "dist:win-nsis": "npm run build && electron-builder --win nsis --publish=never",
     "dist:all": "npm run build && electron-builder --win --mac --linux --publish=never",
     "clean": "rimraf dist build",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test:core": "node test-core-modules.js",
+    "test:simple": "node test-simple-core.js",
+    "verify": "node verify-build.js",
+    "check-installed": "node check-installed-app.js",
+    "prepack": "npm run build:core",
+    "predist": "npm run build:core",
+    "predist:win": "npm run build:core",
+    "predist:win-msi": "npm run build:core",
+    "predist:win-nsis": "npm run build:core",
+    "predist:all": "npm run build:core"
   },
   "build": {
     "appId": "com.tallydatabaseloader.app",
@@ -63,7 +73,7 @@
         "to": "database-structure-incremental.sql"
       },
       {
-        "from": "./core",
+        "from": "./core/dist",
         "to": "core"
       },
       {

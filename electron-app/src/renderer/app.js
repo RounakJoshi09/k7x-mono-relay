@@ -1174,19 +1174,37 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
         return;
       }
 
+      // Log the configuration being used (without sensitive data)
+      const safeConfig = {
+        ...config,
+        database: {
+          ...config.database,
+          password: config.database.password ? "***" : "",
+        },
+      };
+      console.log("Starting sync with config:", safeConfig);
+      this.addLogMessage("Starting synchronization...");
+
       const result = await window.tallyAPI.startSync(config);
 
       // Check if there's an error response (e.g., sync already running)
       if (result && result.error) {
         this.showToast("Info", result.error, "info");
+        this.addLogMessage(`Sync start error: ${result.error}`);
         return;
       }
 
       this.updateSyncButtons(true);
       this.showToast("Info", "Sync started", "info");
+      this.addLogMessage("Sync process started successfully");
     } catch (error) {
       console.error("Failed to start sync:", error);
-      this.showToast("Error", "Failed to start sync", "error");
+      this.addLogMessage(`Failed to start sync: ${error.message || error}`);
+      this.showToast(
+        "Error",
+        `Failed to start sync: ${error.message || error}`,
+        "error"
+      );
     }
   }
 
@@ -1274,8 +1292,41 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
 
   onSyncError(error) {
     this.updateSyncStatus(error);
-    this.showToast("Error", error.message || "Sync failed", "error");
+
+    // Enhanced error display
+    let errorMessage = "Sync failed";
+    let errorDetails = "";
+
+    if (error && error.error) {
+      errorMessage = error.error;
+      if (error.message && error.message !== error.error) {
+        errorDetails = error.message;
+      }
+    } else if (error && error.message) {
+      errorMessage = error.message;
+    }
+
+    // Show detailed error in console for debugging
+    console.error("Sync Error Details:", error);
+
+    // Show error toast with details if available
+    if (errorDetails) {
+      this.showToast(
+        "Error",
+        `${errorMessage}\n\nDetails: ${errorDetails}`,
+        "error"
+      );
+    } else {
+      this.showToast("Error", errorMessage, "error");
+    }
+
     this.updateSyncButtons(false);
+
+    // Add error to log display
+    this.addLogMessage(`ERROR: ${errorMessage}`);
+    if (errorDetails) {
+      this.addLogMessage(`DETAILS: ${errorDetails}`);
+    }
   }
 
   updateSyncButtons(isRunning) {

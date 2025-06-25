@@ -486,16 +486,49 @@ export class TallyDatabaseCore extends EventEmitter {
       const corePath = this.getCorePath();
       const args = this.configToArgs(config);
 
-      this.syncProcess = childProcess.fork(
-        path.join(corePath, "index.mjs"),
-        args
-      );
+      // Enhanced debugging information
+      this.emit("log-message", `Core path: ${corePath}`);
+      this.emit("log-message", `Arguments: ${JSON.stringify(args)}`);
+
+      // Check if core files exist
+      const indexPath = path.join(corePath, "index.mjs");
+      if (!fs.existsSync(indexPath)) {
+        throw new Error(`Core sync file not found: ${indexPath}`);
+      }
+
+      this.emit("log-message", `Starting sync process: ${indexPath}`);
+
+      this.syncProcess = childProcess.fork(indexPath, args, {
+        stdio: ["pipe", "pipe", "pipe", "ipc"],
+        env: {
+          ...process.env,
+          NODE_ENV: app.isPackaged ? "production" : "development",
+        },
+      });
+
+      // Capture stdout and stderr for debugging
+      let stdoutData = "";
+      let stderrData = "";
+
+      if (this.syncProcess.stdout) {
+        this.syncProcess.stdout.on("data", (data) => {
+          stdoutData += data.toString();
+          this.emit("log-message", `STDOUT: ${data.toString().trim()}`);
+        });
+      }
+
+      if (this.syncProcess.stderr) {
+        this.syncProcess.stderr.on("data", (data) => {
+          stderrData += data.toString();
+          this.emit("log-message", `STDERR: ${data.toString().trim()}`);
+        });
+      }
 
       this.syncProcess.on("message", (msg: any) => {
         this.handleSyncMessage(msg);
       });
 
-      this.syncProcess.on("exit", (code) => {
+      this.syncProcess.on("exit", (code, signal) => {
         this.syncStatus.isRunning = false;
         this.syncStatus.endTime = new Date();
 
@@ -504,7 +537,18 @@ export class TallyDatabaseCore extends EventEmitter {
           this.emit("sync-complete", this.syncStatus);
         } else {
           this.syncStatus.message = "Sync failed";
-          this.syncStatus.error = `Process exited with code ${code}`;
+          this.syncStatus.error = `Process exited with code ${code}${
+            signal ? `, signal: ${signal}` : ""
+          }`;
+
+          // Enhanced error information
+          if (stderrData) {
+            this.syncStatus.error += `\nSTDERR: ${stderrData}`;
+          }
+          if (stdoutData) {
+            this.syncStatus.error += `\nSTDOUT: ${stdoutData}`;
+          }
+
           this.emit("sync-error", this.syncStatus);
         }
 
@@ -514,7 +558,7 @@ export class TallyDatabaseCore extends EventEmitter {
       this.syncProcess.on("error", (error) => {
         this.syncStatus.isRunning = false;
         this.syncStatus.message = "Sync error";
-        this.syncStatus.error = error.message;
+        this.syncStatus.error = `Process error: ${error.message}\nSTDERR: ${stderrData}\nSTDOUT: ${stdoutData}`;
         this.emit("sync-error", this.syncStatus);
         this.syncProcess = null;
       });
@@ -524,6 +568,7 @@ export class TallyDatabaseCore extends EventEmitter {
       this.syncStatus.isRunning = false;
       this.syncStatus.error =
         error instanceof Error ? error.message : "Unknown error";
+      this.emit("log-message", `Sync startup error: ${this.syncStatus.error}`);
       throw error;
     }
   }

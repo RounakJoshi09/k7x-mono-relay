@@ -88,6 +88,17 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "TypeScript build completed" -ForegroundColor Green
 Write-Host ""
 
+Write-Host "Verifying build..." -ForegroundColor Yellow
+npm run verify
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Build verification failed" -ForegroundColor Red
+    Write-Host "Please fix the issues above before building the installer" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+Write-Host "Build verification completed" -ForegroundColor Green
+Write-Host ""
+
 # Check if running as administrator (recommended for installer builds)
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
