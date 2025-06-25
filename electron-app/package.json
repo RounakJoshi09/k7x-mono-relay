@@ -63,6 +63,10 @@
         "to": "database-structure-incremental.sql"
       },
       {
+        "from": "./core",
+        "to": "core"
+      },
+      {
         "from": "./platform",
         "to": "platform"
       },

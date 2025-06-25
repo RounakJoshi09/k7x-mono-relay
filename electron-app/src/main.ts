@@ -626,9 +626,6 @@ class TallyDatabaseLoaderApp {
     options: { format?: string; date?: string } = {}
   ): Promise<{ success: boolean; filePath?: string; error?: string }> {
     try {
-      // Import the local log viewer with dynamic import to handle ES modules
-      const { pathToFileURL } = await import("url");
-
       // Debug information
       console.log("Export logs debug info:", {
         isDev: this.isDev,
@@ -639,35 +636,107 @@ class TallyDatabaseLoaderApp {
         exeDir: path.dirname(app.getPath("exe")),
       });
 
-      // Always look for the compiled module in the dist directory
-      // Since we're running from dist/main.js, core should be at dist/core/dist/
-      const viewerPath = path.join(
-        __dirname,
-        "core",
-        "dist",
-        "local-log-viewer.mjs"
-      );
+      // Instead of importing the complex module, create a simple log export function
+      console.log("Creating simple log export function");
 
-      console.log("Checking viewer path:", viewerPath);
-      console.log("File exists:", fs.existsSync(viewerPath));
+      // Simple log export function that mimics the local-log-viewer functionality
+      const exportLogsSimple = (date: string, format: string) => {
+        const logsDirectory = path.join(process.cwd(), "logs");
+        const dateDir = path.join(logsDirectory, date);
+        const outputDir = path.join(logsDirectory, "exports");
 
-      if (!fs.existsSync(viewerPath)) {
-        throw new Error(`Local log viewer module not found at: ${viewerPath}`);
-      }
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
 
-      const viewerURL = pathToFileURL(viewerPath).href;
-      console.log("Importing from URL:", viewerURL);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        let fileName: string;
+        let content: string;
 
-      // Use eval to bypass TypeScript/Electron's CommonJS restriction
-      // This is a workaround for importing ES modules from CommonJS in Electron
-      const logViewerModule = await eval("import(viewerURL)");
-      console.log("Available exports:", Object.keys(logViewerModule));
+        // Simple log collection - just get all log files for the date
+        const logFiles: string[] = [];
+        if (fs.existsSync(dateDir)) {
+          const files = fs.readdirSync(dateDir);
+          files.forEach((file) => {
+            if (file.endsWith(".log")) {
+              logFiles.push(path.join(dateDir, file));
+            }
+          });
+        }
 
-      const { localLogViewer } = logViewerModule;
+        // Create simple log entries
+        const entries: any[] = [];
+        logFiles.forEach((filePath) => {
+          try {
+            const fileContent = fs.readFileSync(filePath, "utf-8");
+            const lines = fileContent.split("\n");
+            lines.forEach((line) => {
+              if (line.trim() && line.trim().startsWith("{")) {
+                try {
+                  const entry = JSON.parse(line.trim());
+                  entries.push(entry);
+                } catch (e) {
+                  // Skip malformed entries
+                }
+              }
+            });
+          } catch (error) {
+            console.error("Error reading log file:", filePath, error);
+          }
+        });
 
-      if (!localLogViewer) {
-        throw new Error("localLogViewer export not found in module");
-      }
+        switch (format) {
+          case "json":
+            fileName = `logs-${date}-${timestamp}.json`;
+            content = JSON.stringify(entries, null, 2);
+            break;
+          case "csv":
+            fileName = `logs-${date}-${timestamp}.csv`;
+            const headers =
+              "Timestamp,Level,Function,Message,Error Code,Context\n";
+            const rows = entries
+              .map((entry) => {
+                const errorCode = entry.error?.code || "";
+                const context = entry.context
+                  ? JSON.stringify(entry.context).replace(/"/g, '""')
+                  : "";
+                const message = (entry.message || "").replace(/"/g, '""');
+                return `"${entry.timestamp}","${entry.level}","${entry.functionName}","${message}","${errorCode}","${context}"`;
+              })
+              .join("\n");
+            content = headers + rows;
+            break;
+          case "txt":
+            fileName = `logs-${date}-${timestamp}.txt`;
+            content = entries
+              .map((entry) => {
+                let text = `[${entry.timestamp}] ${entry.level} - ${entry.functionName}: ${entry.message}\n`;
+                if (entry.context) {
+                  text += `  Context: ${JSON.stringify(entry.context)}\n`;
+                }
+                if (entry.error?.stack) {
+                  text += `  Stack: ${entry.error.stack}\n`;
+                }
+                text += "\n";
+                return text;
+              })
+              .join("");
+            break;
+          default:
+            throw new Error(`Unsupported format: ${format}`);
+        }
+
+        const filePath = path.join(outputDir, fileName);
+        fs.writeFileSync(filePath, content, "utf-8");
+        console.log("Logs exported successfully:", {
+          date,
+          format,
+          fileName,
+          entryCount: entries.length,
+          filePath,
+        });
+        return filePath;
+      };
 
       const format = options.format || "json";
       const date = options.date || new Date().toISOString().split("T")[0];
@@ -695,16 +764,12 @@ class TallyDatabaseLoaderApp {
       else if (extension === ".txt") exportFormat = "txt";
       else if (extension === ".json") exportFormat = "json";
 
-      // Export logs using our enhanced logging system
-      const exportedFilePath = localLogViewer.exportLogs(
-        date,
-        exportFormat as "json" | "csv" | "txt"
-      );
+      // Export logs using our simple function
+      const exportedFilePath = exportLogsSimple(date, exportFormat);
 
       // Copy the exported file to the user-selected location
       if (fs.existsSync(exportedFilePath)) {
         fs.copyFileSync(exportedFilePath, result.filePath);
-
         return {
           success: true,
           filePath: result.filePath,
