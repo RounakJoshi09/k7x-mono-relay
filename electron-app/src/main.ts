@@ -26,6 +26,7 @@ class TallyDatabaseLoaderApp {
   private isDev: boolean;
   private tray: Tray | null = null;
   private isQuitting = false;
+  private autoUpdaterEnabled = false;
 
   constructor() {
     this.isDev = process.argv.includes("--dev");
@@ -275,7 +276,31 @@ class TallyDatabaseLoaderApp {
           },
           {
             label: "Check for Updates",
-            click: () => autoUpdater.checkForUpdatesAndNotify(),
+            click: () => {
+              if (!this.autoUpdaterEnabled) {
+                dialog.showMessageBox(this.mainWindow!, {
+                  type: "info",
+                  title: "No Update Server",
+                  message:
+                    "No update server is configured for this application.",
+                  buttons: ["OK"],
+                });
+                return;
+              }
+
+              try {
+                autoUpdater.checkForUpdatesAndNotify();
+              } catch (error) {
+                console.error("Failed to check for updates:", error);
+                dialog.showMessageBox(this.mainWindow!, {
+                  type: "error",
+                  title: "Update Check Failed",
+                  message:
+                    "Failed to check for updates. Please try again later.",
+                  buttons: ["OK"],
+                });
+              }
+            },
           },
           { type: "separator" },
           {
@@ -444,35 +469,90 @@ class TallyDatabaseLoaderApp {
     });
   }
 
+  private isAutoUpdaterConfigured(): boolean {
+    // Check if we have a proper update server configured
+    const updateServerUrl =
+      process.env.UPDATE_SERVER_URL ||
+      process.env.GH_TOKEN ||
+      process.env.ELECTRON_UPDATER_URL;
+
+    // Check if we're in a packaged app
+    if (!app.isPackaged) {
+      return false;
+    }
+
+    // Check if update server URL is configured
+    if (!updateServerUrl) {
+      return false;
+    }
+
+    // Check if app-update.yml exists (optional check)
+    try {
+      const updateYmlPath = path.join(process.resourcesPath, "app-update.yml");
+      if (!fs.existsSync(updateYmlPath)) {
+        console.log("app-update.yml not found, auto-updater disabled");
+        return false;
+      }
+    } catch (error) {
+      console.log("Could not check for app-update.yml, auto-updater disabled");
+      return false;
+    }
+
+    return true;
+  }
+
   private setupAutoUpdater() {
     if (!this.isDev) {
-      autoUpdater.checkForUpdatesAndNotify();
+      try {
+        if (!this.isAutoUpdaterConfigured()) {
+          console.log("Auto-updater not configured, disabling");
+          this.autoUpdaterEnabled = false;
+          return;
+        }
 
-      autoUpdater.on("update-available", () => {
-        dialog.showMessageBox(this.mainWindow!, {
-          type: "info",
-          title: "Update Available",
-          message:
-            "A new version is available. It will be downloaded in the background.",
-          buttons: ["OK"],
+        this.autoUpdaterEnabled = true;
+
+        // Set up error handling for auto-updater
+        autoUpdater.on("error", (error) => {
+          console.error("Auto-updater error:", error);
+          // Don't show error dialog for auto-updater errors to avoid user confusion
         });
-      });
 
-      autoUpdater.on("update-downloaded", () => {
-        dialog
-          .showMessageBox(this.mainWindow!, {
+        autoUpdater.on("update-available", () => {
+          dialog.showMessageBox(this.mainWindow!, {
             type: "info",
-            title: "Update Ready",
+            title: "Update Available",
             message:
-              "Update downloaded. The application will restart to apply the update.",
-            buttons: ["Restart Now", "Later"],
-          })
-          .then((result) => {
-            if (result.response === 0) {
-              autoUpdater.quitAndInstall();
-            }
+              "A new version is available. It will be downloaded in the background.",
+            buttons: ["OK"],
           });
-      });
+        });
+
+        autoUpdater.on("update-downloaded", () => {
+          dialog
+            .showMessageBox(this.mainWindow!, {
+              type: "info",
+              title: "Update Ready",
+              message:
+                "Update downloaded. The application will restart to apply the update.",
+              buttons: ["Restart Now", "Later"],
+            })
+            .then((result) => {
+              if (result.response === 0) {
+                autoUpdater.quitAndInstall();
+              }
+            });
+        });
+
+        // Only check for updates if we have a proper configuration
+        autoUpdater.checkForUpdatesAndNotify();
+      } catch (error) {
+        console.error("Failed to setup auto-updater:", error);
+        this.autoUpdaterEnabled = false;
+        // Don't throw error, just log it and continue
+      }
+    } else {
+      this.autoUpdaterEnabled = false;
     }
   }
 
