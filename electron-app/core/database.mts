@@ -407,20 +407,13 @@ class _database {
               for (let i = 0; i < lstValues.length; i++) {
                 let targetFieldType = lstFieldType[i];
                 let targetFieldValue = lstValues[i];
-                if (targetFieldType == "text") {
-                  let hasUnicodeText = /[^\u0000-\u007f]/g.test(
-                    targetFieldValue
-                  );
-                  targetFieldValue = targetFieldValue.replace(/'/g, "''"); //escape single quote
-                  if (this.config.technology == "mysql")
-                    targetFieldValue = targetFieldValue.replace(/\\/g, "\\\\"); //MySQL requires escaping of backslash
-                  targetFieldValue = `'${targetFieldValue}'`; //enclose value in single quotes for SQL query
-                  if (hasUnicodeText && this.config.technology == "mssql")
-                    targetFieldValue = "N" + targetFieldValue; //SQL Server requires prefixing quoted text with N if any Unicode character exists in string
-                  lstValues[i] = targetFieldValue;
+                if (targetFieldValue == "ñ") {
+                  // NULL placeholder used in Tally CSV export
+                  lstValues[i] = "NULL";
+                } else if (targetFieldType == "text") {
+                  lstValues[i] = this.escapeSqlLiteral(targetFieldValue);
                 } else if (targetFieldType == "date") {
-                  lstValues[i] =
-                    targetFieldValue == "ñ" ? "NULL" : `'${targetFieldValue}'`;
+                  lstValues[i] = `'${targetFieldValue}'`;
                 } else;
               }
               activeLine = lstValues.join(","); //prepare SQL statement with values separated by comma
@@ -473,6 +466,87 @@ class _database {
         reject(err);
       }
     });
+  }
+
+  /**
+   * Current database technology key (lowercase).
+   */
+  getTechnology(): string {
+    return (this.config.technology || "").toLowerCase();
+  }
+
+  /**
+   * Escape a string literal for inclusion in single-quoted SQL across engines.
+   * Also applies MySQL backslash escaping and MSSQL Unicode N-prefix when needed.
+   */
+  escapeSqlLiteral(value: string, options?: { forceUnicode?: boolean }): string {
+    let escaped = (value ?? "").replace(/'/g, "''");
+    const tech = this.getTechnology();
+    if (tech === "mysql") {
+      escaped = escaped.replace(/\\/g, "\\\\");
+    }
+    const quoted = `'${escaped}'`;
+    const hasUnicode = /[^\u0000-\u007f]/g.test(value ?? "");
+    if (tech === "mssql" && (options?.forceUnicode || hasUnicode)) {
+      return "N" + quoted;
+    }
+    return quoted;
+  }
+
+  /**
+   * Dialect-safe SQL to read a numeric config.value row (e.g. Last AlterID Master).
+   * Avoids MySQL-only `cast(... as SIGNED)` on SQL Server / PostgreSQL.
+   */
+  buildConfigNumericValueQuery(configName: string): string {
+    const tech = this.getTechnology();
+    const nameLiteral = this.escapeSqlLiteral(configName);
+    if (tech === "mssql") {
+      return `select coalesce(max(try_cast(value as int)), 0) as x from config where name = ${nameLiteral}`;
+    }
+    if (tech === "postgres") {
+      // value is text; invalid/non-numeric rows are treated as 0 via regex filter
+      return `select coalesce(max(case when value ~ '^-?[0-9]+$' then value::integer else 0 end), 0) as x from config where name = ${nameLiteral}`;
+    }
+    // mysql / default
+    return `select coalesce(max(cast(value as signed)), 0) as x from config where name = ${nameLiteral}`;
+  }
+
+  /**
+   * Read Last AlterID (or any numeric config key) as a number; returns 0 when missing.
+   */
+  async getConfigNumericValue(configName: string): Promise<number> {
+    try {
+      const raw = await this.executeScalar<any>(
+        this.buildConfigNumericValueQuery(configName)
+      );
+      const n = typeof raw === "number" ? raw : parseInt(String(raw ?? "0"), 10);
+      return isNaN(n) ? 0 : n;
+    } catch (err) {
+      // First-run / empty config table should not abort incremental setup
+      logger.logMessage(
+        "getConfigNumericValue(%s): defaulting to 0 (%s)",
+        configName,
+        err instanceof Error ? err.message : String(err)
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Persist loader/runtime keys into config table using dialect-safe literals.
+   */
+  async saveRuntimeConfigRows(rows: Array<{ name: string; value: string }>): Promise<void> {
+    await this.executeNonQuery("truncate table config;");
+    if (!rows.length) return;
+    const valuesSql = rows
+      .map(
+        (r) =>
+          `(${this.escapeSqlLiteral(r.name)}, ${this.escapeSqlLiteral(r.value)})`
+      )
+      .join(",");
+    await this.executeNonQuery(
+      `insert into config(name,value) values ${valuesSql};`
+    );
   }
 
   executeNonQuery(

@@ -125,14 +125,15 @@ class _tally {
             fs.mkdirSync("./csv");
 
             //acquire last AlterID of master & transaction from last sync version of Database
+            // Dialect-specific CAST: MySQL SIGNED / MSSQL INT / Postgres integer (see database.getConfigNumericValue)
             logger.logMessage("Acquiring last AlterID from database");
             let lastAlterIdMasterDatabase =
-              await getDatabaseInstance().executeScalar<number>(
-                `select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Master'`
+              await getDatabaseInstance().getConfigNumericValue(
+                "Last AlterID Master"
               );
             let lastAlterIdTransactionDatabase =
-              await getDatabaseInstance().executeScalar<number>(
-                `select coalesce(max(cast(value as SIGNED )),0) x from config where name = 'Last AlterID Transaction'`
+              await getDatabaseInstance().getConfigNumericValue(
+                "Last AlterID Transaction"
               );
 
             //update active company information before starting import
@@ -352,26 +353,39 @@ class _tally {
             if (flgIsTransactionChanged) {
               //check if any Voucher Type is set to auto numbering
               //automatic voucher number shifts voucher numbers of all subsequent date vouchers on insertion of in-between vouchers which requires updation
-              let countAutoNumberVouchers =
-                await getDatabaseInstance().executeNonQuery(
-                  `select count(*) as c from mst_vouchertype where numbering_method like '%Auto%' ;`
+              // Use executeScalar (not executeNonQuery) so SELECT count(*) works on all engines
+              let countAutoNumberVouchersRaw =
+                await getDatabaseInstance().executeScalar<any>(
+                  `select count(*) as c from mst_vouchertype where numbering_method like '%Auto%'`
                 );
-              if (countAutoNumberVouchers) {
+              let countAutoNumberVouchers =
+                typeof countAutoNumberVouchersRaw === "number"
+                  ? countAutoNumberVouchersRaw
+                  : parseInt(String(countAutoNumberVouchersRaw ?? "0"), 10);
+              if (!isNaN(countAutoNumberVouchers) && countAutoNumberVouchers > 0) {
                 logger.logMessage("  processing voucher number updates");
                 await getDatabaseInstance().executeNonQuery(
                   "truncate table _vchnumber;"
                 );
 
                 //pull list of voucher numbers for all the vouchers
+                // IMPORTANT: compare with === (was assignment `=` which corrupted filters)
                 let activeTable = this.lstTableTransaction.filter(
-                  (p) => (p.name = "trn_voucher")
+                  (p) => p.name === "trn_voucher"
                 )[0];
-                let lstActiveTableFilter = activeTable.filters || [];
+                if (!activeTable) {
+                  logger.logMessage(
+                    "  skipped voucher number updates: trn_voucher definition not found"
+                  );
+                } else {
+                let lstActiveTableFilter = [...(activeTable.filters || [])];
+                // drop incremental AlterID filter if present; auto-number refresh needs full set
+                lstActiveTableFilter = lstActiveTableFilter.filter(
+                  (f) => !/^\$AlterID\s*>/i.test(f)
+                );
                 lstActiveTableFilter.push(
                   '$$IsEqual:($NumberingMethod:VoucherType:$VoucherTypeName):"Automatic"'
                 );
-                if (Array.isArray(activeTable.filters))
-                  activeTable.filters.splice(activeTable.filters.length - 1, 1); //remove AlterID filter
                 let tempTable: tableConfigYAML = {
                   name: "",
                   collection: activeTable.collection,
@@ -405,7 +419,7 @@ class _tally {
                   path.join(process.cwd(), `./csv/_vchnumber.data`)
                 ); //delete temporary file
 
-                //update voucher number with fresh copy
+                //update voucher number with fresh copy (dialect-specific UPDATE syntax)
                 if (getDatabaseInstance().config.technology == "mssql") {
                   await getDatabaseInstance().executeNonQuery(
                     "update t set t.voucher_number = s.voucher_number from trn_voucher as t join _vchnumber as s on s.guid = t.guid;"
@@ -421,6 +435,7 @@ class _tally {
                     "update trn_voucher as t set voucher_number = s.voucher_number from _vchnumber as s where s.guid = t.guid;"
                   );
                 } else;
+                }
               }
             }
 
@@ -827,7 +842,7 @@ class _tally {
             .substr(1);
           let lstCompanyInfoParts = strCompanyInfo.split(/\",\"/g);
           let companyName = lstCompanyInfoParts[1];
-          companyName = companyName.replace(/'/g, '\\"');
+          // Do not pre-mangle company name with MySQL-style escapes; saveRuntimeConfigRows handles SQL literals per dialect
           if (this.config.fromdate == "auto" || this.config.todate == "auto") {
             //auto assign from/to from company info for detection mode
             this.config.fromdate = convertDateYYYYMMDD(lstCompanyInfoParts[2]);
@@ -835,6 +850,8 @@ class _tally {
           }
           let altIdMaster = parseInt(lstCompanyInfoParts[4]);
           let altIdTransaction = parseInt(lstCompanyInfoParts[5]);
+          if (isNaN(altIdMaster)) altIdMaster = 0;
+          if (isNaN(altIdTransaction)) altIdTransaction = 0;
 
           //clear config table of database and insert active company info to config table
           if (
@@ -842,29 +859,28 @@ class _tally {
               getDatabaseInstance().config.technology
             )
           ) {
-            await getDatabaseInstance().executeNonQuery(
-              "truncate table config;"
-            );
-            await getDatabaseInstance().executeNonQuery(
-              `insert into config(name,value) values('Update Timestamp','${new Date().toLocaleString()}'),('Company Name','${companyName}'),('Period From','${
-                this.config.fromdate
-              }'),('Period To','${
-                this.config.todate
-              }'),('Last AlterID Master','${altIdMaster}'),('Last AlterID Transaction','${altIdTransaction}');`
-            );
+            // ISO timestamp avoids locale commas/quotes breaking inserts across engines
+            const updateTs = new Date().toISOString();
+            await getDatabaseInstance().saveRuntimeConfigRows([
+              { name: "Update Timestamp", value: updateTs },
+              { name: "Company Name", value: companyName },
+              { name: "Period From", value: String(this.config.fromdate) },
+              { name: "Period To", value: String(this.config.todate) },
+              { name: "Last AlterID Master", value: String(altIdMaster) },
+              {
+                name: "Last AlterID Transaction",
+                value: String(altIdTransaction),
+              },
+            ]);
           } else if (
             /^(csv|bigquery)$/g.test(getDatabaseInstance().config.technology)
           ) {
-            let csvContent = `name,value\r\nUpdate Timestamp,${new Date()
-              .toLocaleString()
-              .replace(
-                ",",
-                ""
-              )}\r\nCompany Name,${companyName}\r\nPeriod From,${
+            const safeCompany = companyName.replace(/"/g, '""');
+            let csvContent = `name,value\r\nUpdate Timestamp,${new Date().toISOString()}\r\nCompany Name,${safeCompany}\r\nPeriod From,${
               this.config.fromdate
             }\r\nPeriod To,${
               this.config.todate
-            }\r\Last AlterID nMaster,${altIdMaster}\r\Last AlterID nTransaction,${altIdTransaction}`;
+            }\r\nLast AlterID Master,${altIdMaster}\r\nLast AlterID Transaction,${altIdTransaction}`;
             fs.writeFileSync("./csv/config.csv", csvContent, {
               encoding: "utf-8",
             });
