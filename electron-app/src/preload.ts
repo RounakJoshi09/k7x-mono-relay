@@ -15,7 +15,20 @@ interface TallyDatabaseAPI {
   testDatabaseConnection: (
     config: any
   ) => Promise<{ success: boolean; message: string }>;
-  getDatabaseStructure: () => Promise<string>;
+  getDatabaseStructure: (
+    technology?: string,
+    incremental?: boolean
+  ) => Promise<string>;
+  getSupportedDatabases: () => Promise<
+    Array<{
+      technology: string;
+      label: string;
+      defaultPort: number;
+      defaultLoadMethod: string;
+      requiresCredentials: boolean;
+      platformFolder: string;
+    }>
+  >;
 
   // Tally operations
   testTallyConnection: (
@@ -83,7 +96,9 @@ const api: TallyDatabaseAPI = {
   // Database operations
   testDatabaseConnection: (config) =>
     ipcRenderer.invoke("test-database-connection", config),
-  getDatabaseStructure: () => ipcRenderer.invoke("get-database-structure"),
+  getDatabaseStructure: (technology?: string, incremental?: boolean) =>
+    ipcRenderer.invoke("get-database-structure", technology, incremental),
+  getSupportedDatabases: () => ipcRenderer.invoke("get-supported-databases"),
 
   // Tally operations
   testTallyConnection: (config) =>

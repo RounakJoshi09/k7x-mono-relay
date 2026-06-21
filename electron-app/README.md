@@ -5,13 +5,36 @@ A standalone Windows desktop application that wraps the Tally Database Loader No
 ## Features
 
 - **Intuitive GUI Interface**: Modern, responsive web-based UI using HTML/CSS/JavaScript
-- **Database Support**: SQL Server, PostgreSQL, MySQL, MariaDB, BigQuery
+- **Multi-Database Support**: Microsoft SQL Server, PostgreSQL, MySQL, MariaDB, Google BigQuery, Azure Data Lake, CSV export
+- **Technology-specific DDL**: Structure scripts under `platform/<technology>/` (full + incremental)
 - **Sync Modes**: Full sync and incremental sync capabilities
 - **SSH Tunnel Support**: Secure database connections through SSH tunnels
 - **Real-time Monitoring**: Live sync progress tracking and logging
 - **Configuration Management**: Save, load, import, and export configurations
 - **Windows Integration**: Native Windows application with system tray support
 - **Auto-updates**: Built-in update mechanism for seamless upgrades
+
+## Supported Databases
+
+| Technology | Config value | Default port | Structure scripts |
+|---|---|---|---|
+| Microsoft SQL Server | `mssql` | 1433 | `platform/mssql/` |
+| MySQL / MariaDB | `mysql` | 3306 | `platform/mysql/` |
+| PostgreSQL | `postgres` | 5432 | `platform/postgresql/` |
+| Google BigQuery | `bigquery` | — | `platform/google-bigquery/` |
+| Azure Data Lake | `adls` | — | (file/CDL export) |
+| CSV Files | `csv` | — | (local file export) |
+
+### Setup steps (all RDBMS targets)
+
+1. Install/create the target database server and an empty database (e.g. `tally_data`).
+2. In the app, select the matching **Database Technology** tile (MySQL / PostgreSQL / SQL Server / BigQuery).
+3. Enter server, port, database name, username, and password.
+4. Open **View Database Structure** — it loads the correct dialect for the selected technology and sync mode (full vs incremental).
+5. Run that SQL script in your DB tool (SSMS, MySQL Workbench, pgAdmin, etc.).
+6. Save configuration and start the sync.
+
+**SQL Server note:** TCP/IP must be enabled in SQL Server Configuration Manager (default port 1433). Trusted/Windows authentication is not supported; use SQL authentication (`sa` or another SQL login).
 
 ## Prerequisites
 
@@ -205,7 +228,15 @@ The application uses a JSON configuration file that contains:
    - Check database permissions
    - Verify Tally company access
 
-4. **Application Won't Start**
+4. **Permission Errors (EPERM)**
+
+   - **Automatic Fix**: The application now includes automatic fallback paths
+   - **Manual Fix**: Run `.\fix-permissions.ps1` in the application directory
+   - **Run as Administrator**: Right-click the application → "Run as Administrator"
+   - **Check Antivirus**: Add application paths to antivirus exclusions
+   - **See**: `PERMISSION-ISSUES.md` for detailed solutions
+
+5. **Application Won't Start**
    - Check Windows version compatibility
    - Run as administrator if needed
    - Review installation logs

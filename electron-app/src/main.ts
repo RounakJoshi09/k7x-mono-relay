@@ -351,8 +351,13 @@ class TallyDatabaseLoaderApp {
     ipcMain.handle("test-database-connection", (_, config) =>
       this.tallyCore.testDatabaseConnection(config)
     );
-    ipcMain.handle("get-database-structure", () =>
-      this.tallyCore.getDatabaseStructure()
+    ipcMain.handle(
+      "get-database-structure",
+      (_, technology?: string, incremental?: boolean) =>
+        this.tallyCore.getDatabaseStructure(technology, incremental)
+    );
+    ipcMain.handle("get-supported-databases", () =>
+      this.tallyCore.getSupportedDatabases()
     );
 
     // Tally operations

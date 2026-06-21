@@ -832,39 +832,84 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
     const technology = document.getElementById("db-technology").value;
     const portField = document.getElementById("db-port");
     const loadMethodField = document.getElementById("db-load-method");
+    const usernameField = document.getElementById("db-username");
+    const schemaField = document.getElementById("db-schema");
 
-    // Set default ports and load methods
+    // Set default ports, load methods, and placeholder credentials
     switch (technology) {
       case "mysql":
         portField.value = 3306;
-        loadMethodField.value = "insert";
+        if (loadMethodField) loadMethodField.value = "insert";
+        if (usernameField && !usernameField.value) usernameField.placeholder = "root";
+        if (schemaField) schemaField.placeholder = "tally_data";
         break;
       case "mssql":
         portField.value = 1433;
-        loadMethodField.value = "file";
+        if (loadMethodField) loadMethodField.value = "file";
+        if (usernameField && !usernameField.value) usernameField.placeholder = "sa";
+        if (schemaField) schemaField.placeholder = "tally_data";
         break;
       case "postgres":
         portField.value = 5432;
-        loadMethodField.value = "file";
+        if (loadMethodField) loadMethodField.value = "file";
+        if (usernameField && !usernameField.value) usernameField.placeholder = "postgres";
+        if (schemaField) schemaField.placeholder = "tally_data";
         break;
       case "bigquery":
       case "adls":
       case "csv":
         portField.value = 0;
-        loadMethodField.value = "file";
+        if (loadMethodField) loadMethodField.value = "file";
         break;
     }
+
+    // Highlight the matching visual db-option card
+    document.querySelectorAll(".db-option").forEach((opt) => {
+      opt.classList.toggle("active", opt.dataset.db === technology);
+    });
 
     // Enable/disable fields based on technology
     const needsCredentials = ["mysql", "mssql", "postgres"].includes(
       technology
     );
-    document.getElementById("db-server").disabled =
-      !needsCredentials && technology !== "adls";
-    document.getElementById("db-port").disabled = !needsCredentials;
-    document.getElementById("db-username").disabled = !needsCredentials;
-    document.getElementById("db-password").disabled = !needsCredentials;
-    document.getElementById("db-ssl").disabled = !needsCredentials;
+    const serverField = document.getElementById("db-server");
+    if (serverField)
+      serverField.disabled = !needsCredentials && technology !== "adls";
+    if (portField) portField.disabled = !needsCredentials;
+    if (usernameField) usernameField.disabled = !needsCredentials;
+    const passwordField = document.getElementById("db-password");
+    if (passwordField) passwordField.disabled = !needsCredentials;
+    const sslField = document.getElementById("db-ssl");
+    if (sslField) sslField.disabled = !needsCredentials;
+
+    // Surface a brief hint for SQL Server TCP/IP requirement
+    this.updateDatabaseTechnologyHint(technology);
+  }
+
+  updateDatabaseTechnologyHint(technology) {
+    let hintEl = document.getElementById("db-technology-hint");
+    if (!hintEl) {
+      const selector = document.querySelector(".database-selector");
+      if (!selector) return;
+      hintEl = document.createElement("p");
+      hintEl.id = "db-technology-hint";
+      hintEl.className = "form-hint text-muted small mt-2 mb-0";
+      selector.parentNode.insertBefore(hintEl, selector.nextSibling);
+    }
+
+    const hints = {
+      mssql:
+        "SQL Server: TCP/IP must be enabled (port 1433). Create the database first, then run the structure script via View Database Structure.",
+      mysql:
+        "MySQL/MariaDB: Create the database first, then run the structure script via View Database Structure.",
+      postgres:
+        "PostgreSQL: Create the database first, then run the structure script via View Database Structure.",
+      bigquery:
+        "BigQuery: Place bigquery-credentials.json in the app folder. Structure uses Google BigQuery SQL dialect.",
+      adls: "Azure Data Lake: Configure connection string / account in advanced settings.",
+      csv: "CSV mode exports data files locally; database connection fields are not used.",
+    };
+    hintEl.textContent = hints[technology] || "";
   }
 
   onSyncModeChange() {
@@ -1492,16 +1537,51 @@ SSH: ${summary.database.sshEnabled ? "Enabled" : "Disabled"}`;
 
   async viewDatabaseStructure() {
     try {
-      const structure = await window.tallyAPI.getDatabaseStructure();
-      document.getElementById("database-structure-content").textContent =
-        structure;
+      const technology =
+        document.getElementById("db-technology")?.value || "mssql";
+      const syncMode = document.getElementById("sync-mode")?.value || "full";
+      const incremental = syncMode === "incremental";
+
+      const structure = await window.tallyAPI.getDatabaseStructure(
+        technology,
+        incremental
+      );
+
+      const techLabels = {
+        mysql: "MySQL / MariaDB",
+        postgres: "PostgreSQL",
+        mssql: "Microsoft SQL Server",
+        bigquery: "Google BigQuery",
+        adls: "Azure Data Lake",
+        csv: "CSV",
+      };
+      const techLabel = techLabels[technology] || technology;
+      const modeLabel = incremental ? "Incremental" : "Full";
+
+      const contentEl = document.getElementById("database-structure-content");
+      if (contentEl) {
+        contentEl.textContent = `-- Database: ${techLabel}\n-- Sync mode: ${modeLabel}\n-- Run this script in your database BEFORE starting the first sync.\n\n${structure}`;
+      }
+
+      // Update modal title if present
+      const modalTitle = document.querySelector(
+        "#database-structure-modal .modal-title"
+      );
+      if (modalTitle) {
+        modalTitle.textContent = `Database Structure — ${techLabel} (${modeLabel})`;
+      }
 
       const modal = new bootstrap.Modal(
         document.getElementById("database-structure-modal")
       );
       modal.show();
     } catch (error) {
-      this.showToast("Error", "Failed to load database structure", "error");
+      console.error("viewDatabaseStructure error:", error);
+      this.showToast(
+        "Error",
+        "Failed to load database structure for selected technology",
+        "error"
+      );
     }
   }
 

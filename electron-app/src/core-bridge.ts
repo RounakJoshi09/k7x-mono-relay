@@ -92,60 +92,114 @@ export class TallyDatabaseCore extends EventEmitter {
         : path.join(__dirname, "../config-default.json");
 
       if (fs.existsSync(resourcesPath)) {
-        // Copy the default config from resources
-        fs.copyFileSync(resourcesPath, this.configPath);
-      } else {
-        // Fallback to hardcoded default if resources file doesn't exist
-        const defaultConfig: AppConfig = {
-          database: {
-            technology: "mysql",
-            server: "localhost",
-            port: 3306,
-            ssl: false,
-            schema: "tally",
-            username: "root",
-            password: "",
-            loadmethod: "insert",
-            ssh_tunnel: {
-              enabled: false,
-              host: "",
-              port: 22,
-              username: "",
-              password: "",
-              privateKey: "",
-              localPort: 3307,
-              remoteHost: "localhost",
-              remotePort: 3306,
-            },
-          },
-          tally: {
-            definition: "tally-export-config.yaml",
-            server: "localhost",
-            port: 9000,
-            company: "",
-            fromdate: "auto",
-            todate: "auto",
-            frequency: 0,
-            sync: "full",
-          },
-        };
-
-        fs.writeFileSync(
-          this.configPath,
-          JSON.stringify(defaultConfig, null, 2)
-        );
+        // Try to copy to primary path first
+        try {
+          fs.copyFileSync(resourcesPath, this.configPath);
+          return;
+        } catch (error) {
+          this.emit("log-message", `Could not write to primary path: ${error}`);
+        }
       }
+
+      // If primary path failed, try fallback paths
+      const fallbackPaths = this.getConfigSavePaths().slice(1); // Skip primary path
+      for (const fallbackPath of fallbackPaths) {
+        try {
+          // Ensure directory exists
+          const fallbackDir = path.dirname(fallbackPath);
+          if (!fs.existsSync(fallbackDir)) {
+            fs.mkdirSync(fallbackDir, { recursive: true });
+          }
+
+          if (fs.existsSync(resourcesPath)) {
+            // Copy from resources
+            fs.copyFileSync(resourcesPath, fallbackPath);
+          } else {
+            // Fallback to hardcoded default if resources file doesn't exist
+            const defaultConfig: AppConfig = {
+              database: {
+                technology: "mysql",
+                server: "localhost",
+                port: 3306,
+                ssl: false,
+                schema: "tally",
+                username: "root",
+                password: "",
+                loadmethod: "insert",
+                ssh_tunnel: {
+                  enabled: false,
+                  host: "",
+                  port: 22,
+                  username: "",
+                  password: "",
+                  privateKey: "",
+                  localPort: 3307,
+                  remoteHost: "localhost",
+                  remotePort: 3306,
+                },
+              },
+              tally: {
+                definition: "tally-export-config.yaml",
+                server: "localhost",
+                port: 9000,
+                company: "",
+                fromdate: "auto",
+                todate: "auto",
+                frequency: 0,
+                sync: "full",
+              },
+            };
+
+            fs.writeFileSync(
+              fallbackPath,
+              JSON.stringify(defaultConfig, null, 2)
+            );
+          }
+
+          // Update config path to the successful fallback
+          this.configPath = fallbackPath;
+          this.emit("log-message", `Created default configuration in fallback location: ${fallbackPath}`);
+          return;
+        } catch (error) {
+          this.emit("log-message", `Failed to create config in ${fallbackPath}: ${error}`);
+          continue;
+        }
+      }
+
+      // If all fallbacks failed, throw an error
+      throw new Error("Could not create configuration file in any location");
     }
   }
 
   public loadConfiguration(): AppConfig {
     try {
+      // First try to load from the primary path
       if (!fs.existsSync(this.configPath)) {
         this.emit(
           "log-message",
-          "Configuration file not found, creating default configuration"
+          "Configuration file not found in primary location, checking fallback locations"
         );
-        this.ensureConfigExists();
+
+        // Try to find existing config in fallback locations
+        const fallbackPaths = this.getConfigSavePaths().slice(1); // Skip primary path
+        let foundConfig = false;
+
+        for (const fallbackPath of fallbackPaths) {
+          if (fs.existsSync(fallbackPath)) {
+            this.emit("log-message", `Found configuration in fallback location: ${fallbackPath}`);
+            this.configPath = fallbackPath;
+            foundConfig = true;
+            break;
+          }
+        }
+
+        if (!foundConfig) {
+          this.emit(
+            "log-message",
+            "Configuration file not found, creating default configuration"
+          );
+          this.ensureConfigExists();
+        }
       }
 
       const configData = fs.readFileSync(this.configPath, "utf8");
@@ -161,11 +215,15 @@ export class TallyDatabaseCore extends EventEmitter {
         );
 
         const backupPath = this.configPath + `.backup.${Date.now()}`;
-        fs.copyFileSync(this.configPath, backupPath);
-        this.emit(
-          "log-message",
-          `Corrupted configuration backed up to: ${backupPath}`
-        );
+        try {
+          fs.copyFileSync(this.configPath, backupPath);
+          this.emit(
+            "log-message",
+            `Corrupted configuration backed up to: ${backupPath}`
+          );
+        } catch (backupError) {
+          this.emit("log-message", `Warning: Could not create backup: ${backupError}`);
+        }
 
         // Generate new default configuration
         this.ensureConfigExists();
@@ -197,26 +255,89 @@ export class TallyDatabaseCore extends EventEmitter {
         throw new Error("Invalid configuration structure");
       }
 
-      // Ensure the directory exists
-      const configDir = path.dirname(this.configPath);
-      if (!fs.existsSync(configDir)) {
-        fs.mkdirSync(configDir, { recursive: true });
+      // Try multiple paths for saving configuration
+      const savePaths = this.getConfigSavePaths();
+      let saved = false;
+      let lastError: Error | null = null;
+
+      for (const savePath of savePaths) {
+        try {
+          // Ensure the directory exists
+          const configDir = path.dirname(savePath);
+          if (!fs.existsSync(configDir)) {
+            fs.mkdirSync(configDir, { recursive: true });
+          }
+
+          // Create backup before saving (only for the primary path)
+          if (savePath === this.configPath && fs.existsSync(this.configPath)) {
+            const backupPath = this.configPath + `.backup.${Date.now()}`;
+            try {
+              fs.copyFileSync(this.configPath, backupPath);
+              this.emit("log-message", `Configuration backed up to: ${backupPath}`);
+            } catch (backupError) {
+              this.emit("log-message", `Warning: Could not create backup: ${backupError}`);
+            }
+          }
+
+          // Save the configuration
+          fs.writeFileSync(savePath, JSON.stringify(config, null, 2));
+
+          // Update the config path if we used a fallback
+          if (savePath !== this.configPath) {
+            this.configPath = savePath;
+            this.emit("log-message", `Configuration saved to fallback path: ${savePath}`);
+          } else {
+            this.emit("log-message", "Configuration saved successfully");
+          }
+
+          saved = true;
+          break;
+        } catch (error) {
+          lastError = error as Error;
+          this.emit("log-message", `Failed to save to ${savePath}: ${error}`);
+          continue;
+        }
       }
 
-      // Create backup before saving
-      if (fs.existsSync(this.configPath)) {
-        const backupPath = this.configPath + `.backup.${Date.now()}`;
-        fs.copyFileSync(this.configPath, backupPath);
-        this.emit("log-message", `Configuration backed up to: ${backupPath}`);
+      if (!saved) {
+        throw new Error(`Failed to save configuration to any location. Last error: ${lastError?.message}`);
       }
-
-      // Save the configuration
-      fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
-      this.emit("log-message", "Configuration saved successfully");
     } catch (error) {
       this.emit("log-message", `Error saving configuration: ${error}`);
       throw new Error(`Failed to save configuration: ${error}`);
     }
+  }
+
+  private getConfigSavePaths(): string[] {
+    const paths: string[] = [];
+
+    // Primary path (original userData path)
+    paths.push(this.configPath);
+
+    // Fallback paths for Windows permission issues
+    if (process.platform === 'win32') {
+      // Try user's Documents folder
+      const documentsPath = path.join(app.getPath("documents"), "Tally Database Loader", "config.json");
+      paths.push(documentsPath);
+
+      // Try user's Desktop
+      const desktopPath = path.join(app.getPath("desktop"), "Tally Database Loader", "config.json");
+      paths.push(desktopPath);
+
+      // Try application directory (if writable)
+      const appDataPath = path.join(process.cwd(), "config.json");
+      paths.push(appDataPath);
+
+      // Try temp directory as last resort
+      const tempPath = path.join(app.getPath("temp"), "tally-database-loader", "config.json");
+      paths.push(tempPath);
+    } else {
+      // For non-Windows platforms, try home directory
+      const homePath = path.join(process.env.HOME || process.env.USERPROFILE || "", ".tally-database-loader", "config.json");
+      paths.push(homePath);
+    }
+
+    return paths;
   }
 
   public resetToDefaults(): void {
@@ -541,9 +662,8 @@ export class TallyDatabaseCore extends EventEmitter {
           this.emit("sync-complete", this.syncStatus);
         } else {
           this.syncStatus.message = "Sync failed";
-          this.syncStatus.error = `Process exited with code ${code}${
-            signal ? `, signal: ${signal}` : ""
-          }`;
+          this.syncStatus.error = `Process exited with code ${code}${signal ? `, signal: ${signal}` : ""
+            }`;
 
           // Enhanced error information
           if (stderrData) {
@@ -596,16 +716,138 @@ export class TallyDatabaseCore extends EventEmitter {
     return this.syncStatus.isRunning;
   }
 
-  public getDatabaseStructure(): string {
+  /**
+   * Returns the CREATE TABLE script for the selected database technology and sync mode.
+   * Scripts live under platform/<technology>/ with a fallback to the root-level MSSQL scripts.
+   */
+  public getDatabaseStructure(
+    technology?: string,
+    incremental?: boolean
+  ): string {
     try {
-      const structurePath = app.isPackaged
-        ? path.join(process.resourcesPath, "database-structure.sql")
-        : path.join(__dirname, "../../database-structure.sql");
+      let savedConfig: AppConfig | null = null;
+      try {
+        if (fs.existsSync(this.configPath)) {
+          savedConfig = JSON.parse(
+            fs.readFileSync(this.configPath, "utf8")
+          ) as AppConfig;
+        }
+      } catch {
+        savedConfig = null;
+      }
 
-      return fs.readFileSync(structurePath, "utf8");
+      const tech = (
+        technology ||
+        savedConfig?.database?.technology ||
+        "mssql"
+      )
+        .toLowerCase()
+        .trim();
+      const isIncremental =
+        incremental === true ||
+        (incremental !== false && savedConfig?.tally?.sync === "incremental");
+      const fileName = isIncremental
+        ? "database-structure-incremental.sql"
+        : "database-structure.sql";
+
+      // Map UI/config technology names to platform folder names
+      const platformFolderMap: Record<string, string> = {
+        mssql: "mssql",
+        mysql: "mysql",
+        postgres: "postgresql",
+        postgresql: "postgresql",
+        bigquery: "google-bigquery",
+      };
+      const platformFolder = platformFolderMap[tech] || "mssql";
+
+      const candidatePaths: string[] = [];
+      if (app.isPackaged) {
+        candidatePaths.push(
+          path.join(process.resourcesPath, "platform", platformFolder, fileName)
+        );
+        candidatePaths.push(path.join(process.resourcesPath, fileName));
+      } else {
+        candidatePaths.push(
+          path.join(__dirname, "../../platform", platformFolder, fileName)
+        );
+        candidatePaths.push(path.join(__dirname, "../../", fileName));
+      }
+
+      for (const structurePath of candidatePaths) {
+        if (fs.existsSync(structurePath)) {
+          return fs.readFileSync(structurePath, "utf8");
+        }
+      }
+
+      throw new Error(
+        `Database structure file not found for technology "${tech}" (incremental=${isIncremental}). Tried: ${candidatePaths.join(", ")}`
+      );
     } catch (error) {
       throw new Error(`Failed to load database structure: ${error}`);
     }
+  }
+
+  /**
+   * Lists supported database technologies with default ports and connection hints.
+   */
+  public getSupportedDatabases(): Array<{
+    technology: string;
+    label: string;
+    defaultPort: number;
+    defaultLoadMethod: string;
+    requiresCredentials: boolean;
+    platformFolder: string;
+  }> {
+    return [
+      {
+        technology: "mysql",
+        label: "MySQL / MariaDB",
+        defaultPort: 3306,
+        defaultLoadMethod: "insert",
+        requiresCredentials: true,
+        platformFolder: "mysql",
+      },
+      {
+        technology: "postgres",
+        label: "PostgreSQL",
+        defaultPort: 5432,
+        defaultLoadMethod: "file",
+        requiresCredentials: true,
+        platformFolder: "postgresql",
+      },
+      {
+        technology: "mssql",
+        label: "Microsoft SQL Server",
+        defaultPort: 1433,
+        defaultLoadMethod: "file",
+        requiresCredentials: true,
+        platformFolder: "mssql",
+      },
+      {
+        technology: "bigquery",
+        label: "Google BigQuery",
+        defaultPort: 0,
+        defaultLoadMethod: "file",
+        requiresCredentials: false,
+        platformFolder: "google-bigquery",
+      },
+      {
+        technology: "adls",
+        label: "Azure Data Lake Storage",
+        defaultPort: 0,
+        defaultLoadMethod: "file",
+        requiresCredentials: false,
+        platformFolder: "",
+      },
+      {
+        technology: "csv",
+        label: "CSV Files",
+        defaultPort: 0,
+        defaultLoadMethod: "file",
+        requiresCredentials: false,
+        platformFolder: "",
+      },
+    ];
   }
 
   public getLogs(): string {

@@ -205,6 +205,63 @@ class _database {
             else;
             throw errorMessage || connErr;
           }
+        } else if (this.config.technology == "mssql") {
+          // Validate SQL Server credentials with a lightweight connection test.
+          // MSSQL uses per-query connections (tedious) rather than a long-lived pool.
+          try {
+            await new Promise<void>((mssqlResolve, mssqlReject) => {
+              let connection = new mssql.Connection({
+                server: this.config.server,
+                authentication: {
+                  options: {
+                    userName: this.config.username,
+                    password: this.config.password,
+                  },
+                  type: "default",
+                },
+                options: {
+                  database: this.config.schema,
+                  port: this.config.port,
+                  trustServerCertificate: true,
+                  encrypt: this.config.ssl,
+                  connectTimeout: 15000,
+                },
+              });
+              connection.on("connect", (connErr) => {
+                if (connErr) {
+                  let errorMessage = "";
+                  const msg = connErr.message || "";
+                  if (msg.includes("getaddrinfo ENOTFOUND"))
+                    errorMessage =
+                      "Unable to make SQL Server connection to specified servername or IP address";
+                  else if (
+                    msg.includes("Could not connect (sequence)") ||
+                    msg.includes("ECONNREFUSED") ||
+                    msg.includes("Failed to connect")
+                  )
+                    errorMessage =
+                      "Unable to make SQL Server connection to specified port. Ensure TCP/IP is enabled in SQL Server Configuration Manager.";
+                  else if (msg.includes("Login failed for user"))
+                    errorMessage = "Invalid Database / Username / Password";
+                  else if (msg.includes("Cannot open database"))
+                    errorMessage =
+                      "Invalid SQL Server database name. Create the database first, then run the structure script.";
+                  else;
+                  connection.close();
+                  mssqlReject(errorMessage || connErr);
+                } else {
+                  connection.close();
+                  mssqlResolve();
+                }
+              });
+              connection.on("error", (err) => {
+                mssqlReject(err);
+              });
+              connection.connect();
+            });
+          } catch (mssqlErr) {
+            throw mssqlErr;
+          }
         } else;
         resolve();
       } catch (err) {
