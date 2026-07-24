@@ -710,7 +710,7 @@ class _tally {
               .on("end", () => {
                 resolve(data);
               })
-              .on("error", (httpErr) => {
+              .on("error", (httpErr: Error) => {
                 logger.logMessage(
                   "Unable to connect with Tally. Ensure tally XML port is enabled"
                 );
@@ -722,7 +722,7 @@ class _tally {
               });
           }
         );
-        req.on("error", (reqError) => {
+        req.on("error", (reqError: Error) => {
           logger.logMessage(
             "Unable to connect with Tally. Ensure tally XML port is enabled"
           );

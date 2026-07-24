@@ -254,7 +254,7 @@ class _database {
                   mssqlResolve();
                 }
               });
-              connection.on("error", (err) => {
+              connection.on("error", (err: Error) => {
                 mssqlReject(err);
               });
               connection.connect();

@@ -72,12 +72,12 @@ function postTallyXML(
             .on("end", () => {
               resolve(data);
             })
-            .on("error", (httpErr) => {
+            .on("error", (httpErr: Error) => {
               reject(httpErr);
             });
         }
       );
-      req.on("error", (reqError) => {
+      req.on("error", (reqError: Error) => {
         reject(reqError);
       });
       req.write(payload, "utf16le");
